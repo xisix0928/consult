@@ -125,6 +125,12 @@ details.settings[open]>summary{margin-bottom:12px}
 .tabs{display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:10px}
 .tab{border:0;background:transparent;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:7px;cursor:pointer;min-height:36px}
 .tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.result{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.codebox{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.code{font-family:var(--font-mono);font-size:1.6rem;font-weight:500;letter-spacing:.08em;background:var(--surface);border:1px dashed var(--accent);border-radius:8px;padding:6px 14px}
+.mine-item .sub{font-size:.8rem}
+details.lookup{border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+details.lookup>summary{cursor:pointer;font-weight:500}
 .login{max-width:420px;margin:24px auto;text-align:center;align-items:center}
 @media (max-width:520px){.linkrow{grid-template-columns:1fr auto}.linkrow span{grid-column:1/-1}}
 @media (prefers-reduced-motion:no-preference){.btn,.slot,.cell,.dtab{transition:background .12s,border-color .12s}}
@@ -168,6 +174,7 @@ window.APP_CONFIG = {
   var DOW = ['일','월','화','수','목','금','토'];
   var STATUS = { scheduled:'예정', done:'상담 완료', noshow:'불참' };
   var MODES = ['대면','전화','화상'];
+  var ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
   var FB = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
   var DEMO = !FB.apiKey || /^YOUR_/.test(FB.apiKey);
@@ -175,10 +182,17 @@ window.APP_CONFIG = {
   var ROLE = (qs.get('role') === 'teacher' || location.hash === '#teacher' || /\/teacher\/?$/.test(location.pathname)) ? 'teacher' : 'parent';
 
   var cfg = null, slots = {}, bookings = {}, notes = {};
-  var phase = 'loading', teacherEmail = '', seen = {}, submitting = false;
+  var phase = 'loading', teacherEmail = '', seen = {}, submitting = false, errText = '';
   var selDate = null, selKey = null, tKey = null, armedCancel = false, tSettingsInit = false;
-  var draft = { title:'', notice:'', dates:[], start:'15:00', end:'17:40', duration:20 };
+  var draft = { title:'', notice:'', dates:[], start:'15:00', end:'17:40', duration:20, max:1 };
   var api = null;
+
+  /* 학부모 화면 상태 */
+  var myCodes = [];
+  try { myCodes = JSON.parse(localStorage.getItem('pc-codes') || '[]'); } catch (e) { myCodes = []; }
+  if (!Array.isArray(myCodes)) myCodes = [];
+  var mine = {}, moving = null, armedCode = null, justBooked = null;
+  function saveCodes(){ try { localStorage.setItem('pc-codes', JSON.stringify(myCodes)); } catch (e) {} }
 
   /* ---------- 시간 계산 ---------- */
   function pad(n){ return (n < 10 ? '0' : '') + n; }
@@ -198,6 +212,7 @@ window.APP_CONFIG = {
   function keyOf(date, time){ return date + '_' + time.replace(':', ''); }
   function splitKey(k){ var i = k.indexOf('_'); var t = k.slice(i + 1); return { date: k.slice(0, i), time: t.slice(0, 2) + ':' + t.slice(2) }; }
   function endTime(time){ return fromMin(toMin(time) + (+((cfg || draft).duration) || 20)); }
+  function whenText(k){ var p = splitKey(k); return fd(p.date) + ' ' + p.time + '–' + endTime(p.time); }
   function isPast(date, time){
     var d = parseD(date), p = time.split(':');
     d.setHours(+p[0], +p[1], 0, 0);
@@ -206,21 +221,51 @@ window.APP_CONFIG = {
   function isBooked(k){ return !!slots[k]; }
   function isBlocked(k){ return !!(cfg && cfg.blocked && cfg.blocked.indexOf(k) >= 0); }
   function sortedDates(){ return ((cfg && cfg.dates) || []).slice().sort(); }
+  function maxPer(){ return +((cfg && cfg.maxPerStudent) || 1); }
+
+  /* ---------- 코드·식별자 ---------- */
+  function genCode(){
+    var arr = null, out = '';
+    try { arr = new Uint32Array(8); crypto.getRandomValues(arr); } catch (e) { arr = null; }
+    for (var i = 0; i < 8; i++) out += ALPHA[(arr ? arr[i] : Math.floor(Math.random() * 4294967296)) % ALPHA.length];
+    return out;
+  }
+  function fmtCode(c){ return c ? c.slice(0, 4) + '-' + c.slice(4) : ''; }
+  function normCode(s){ return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function cyrb53(str){
+    var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (var i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  }
+  async function sidOf(name){
+    var norm = String(name).normalize('NFC').replace(/\s+/g, '').toLowerCase();
+    var salt = (FB.projectId || 'demo') + ':';
+    try {
+      if (window.crypto && crypto.subtle && window.TextEncoder) {
+        var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + norm));
+        return Array.from(new Uint8Array(buf)).map(function(b){ return ('0' + b.toString(16)).slice(-2); }).join('').slice(0, 40);
+      }
+    } catch (e) {}
+    return 'h' + cyrb53(salt + norm);
+  }
 
   /* ---------- 알림 ---------- */
   var toastTimer = null;
   function toast(msg){
     var t = $('#toast'); t.textContent = msg; t.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 2800);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 3200);
   }
   function banner(html, cls){ $('#banner').innerHTML = html ? '<div class="' + (cls || 'err') + '">' + html + '</div>' : ''; }
   function fail(e){ banner(esc(errMsg(e))); toast(errMsg(e)); }
   function errMsg(e){
     var c = (e && e.code) || '';
     if (c === 'taken') return '방금 다른 분이 예약했습니다. 다른 시간을 골라 주세요.';
+    if (c === 'limit') return '이 학생은 이미 ' + e.n + '회 예약했습니다(최대 ' + e.max + '회). 위쪽 \'내 예약\'에서 기존 예약을 변경하거나 취소해 주세요. 코드가 기억나지 않으면 선생님께 문의해 주세요.';
     if (c === 'permission-denied') return '저장할 수 없습니다. 이미 마감되었거나 권한이 없습니다.';
     if (c === 'auth/operation-not-allowed') return 'Firebase 콘솔의 Authentication에서 이 로그인 방법(익명 또는 Google)을 사용 설정해야 합니다.';
-    if (c === 'auth/unauthorized-domain') return 'Firebase 콘솔 Authentication의 승인된 도메인에 이 주소(' + esc(location.hostname) + ')를 추가해야 합니다.';
+    if (c === 'auth/unauthorized-domain') return 'Firebase 콘솔 Authentication의 승인된 도메인에 이 주소(' + location.hostname + ')를 추가해야 합니다.';
     if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return '로그인 창이 닫혔습니다. 다시 시도해 주세요.';
     if (c === 'auth/popup-blocked') return '팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 눌러 주세요.';
     if (c === 'unavailable' || c === 'auth/network-request-failed') return '네트워크 연결을 확인해 주세요.';
@@ -229,10 +274,11 @@ window.APP_CONFIG = {
   async function copyText(text, fallbackEl){
     try { await navigator.clipboard.writeText(text); toast('복사했습니다.'); }
     catch (e) {
-      if (fallbackEl) { fallbackEl.focus(); fallbackEl.select(); }
+      if (fallbackEl) { fallbackEl.focus(); if (fallbackEl.select) fallbackEl.select(); }
       toast('선택된 내용을 직접 복사해 주세요.');
     }
   }
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
   /* =====================================================================
      저장소 계층: firebase / 체험 모드(demo)
@@ -242,27 +288,23 @@ window.APP_CONFIG = {
     function clearSubs(){ unsubs.forEach(function(u){ try { u(); } catch (e) {} }); unsubs = []; }
     function toMap(snap){ var o = {}; snap.forEach(function(d){ o[d.id] = d.data(); }); return o; }
     function ref(col, id){ return m.fs.doc(fdb, col, id); }
-    function subscribe(teacher, uid, h){
+    function subscribe(teacher, h){
       var err = function(e){
         if (teacher && e && e.code === 'permission-denied') h.state('denied');
         else h.state('error', e);
       };
       unsubs.push(m.fs.onSnapshot(ref('config', 'main'), function(s){ h.config(s.exists() ? s.data() : null); }, err));
       unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'slots'), function(s){ h.slots(toMap(s)); }, err));
-      var bq = teacher ? m.fs.collection(fdb, 'bookings') : m.fs.query(m.fs.collection(fdb, 'bookings'), m.fs.where('uid', '==', uid));
-      unsubs.push(m.fs.onSnapshot(bq, function(s){ h.bookings(toMap(s)); }, err));
-      if (teacher) unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'notes'), function(s){ h.notes(toMap(s)); }, err));
+      if (teacher) {
+        unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'bookings'), function(s){ h.bookings(toMap(s)); }, err));
+        unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'notes'), function(s){ h.notes(toMap(s)); }, err));
+      }
     }
-    async function write(key, info, asManual){
-      var uid = auth.currentUser.uid, now = Date.now();
-      var b = m.fs.writeBatch(fdb);
-      b.set(ref('slots', key), { taken: true, uid: uid, at: now });
-      var bk = { uid: uid, student: info.student, parent: info.parent || '', phone: info.phone || '', mode: info.mode || '', topic: info.topic || '', at: now };
-      if (asManual) bk.manual = true;
-      b.set(ref('bookings', key), bk);
-      try { await b.commit(); }
-      catch (e) { if (e && e.code === 'permission-denied') throw { code: 'taken' }; throw e; }
+    async function countOf(sid){
+      var s = await m.fs.getDoc(ref('counts', sid));
+      return s.exists() ? (+s.data().n || 0) : 0;
     }
+    function asTaken(e){ return (e && e.code === 'permission-denied') ? { code: 'taken' } : e; }
     return {
       mode: 'firebase',
       start: async function(h){
@@ -277,22 +319,66 @@ window.APP_CONFIG = {
             if (!u || u.isAnonymous) { h.state('login'); return; }
             h.user(u.email || '');
             h.state('loading');
-            subscribe(true, u.uid, h);
+            subscribe(true, h);
           } else {
             if (!u) { m.au.signInAnonymously(auth).catch(function(e){ h.state('error', e); }); return; }
             h.state('loading');
-            subscribe(false, u.uid, h);
+            subscribe(false, h);
           }
         }, function(e){ h.state('error', e); });
       },
       signIn: function(){ return m.au.signInWithPopup(auth, new m.au.GoogleAuthProvider()); },
       signOut: function(){ return m.au.signOut(auth); },
-      book: function(key, info){ return write(key, info, false); },
-      manualBook: function(key, info){ return write(key, info, true); },
-      cancel: async function(key, asTeacher){
+
+      /* 예약. 학부모: 확인 코드와 횟수 기록 포함. 교사 직접 입력(manual): 코드 없음 */
+      book: async function(key, info, manual){
+        var sid = '', n = 0, code = '', now = Date.now(), max = maxPer();
+        if (!manual) {
+          sid = await sidOf(info.student);
+          n = await countOf(sid);
+          if (n >= max) throw { code: 'limit', n: n, max: max };
+          code = genCode();
+        }
         var b = m.fs.writeBatch(fdb);
-        b.delete(ref('slots', key)); b.delete(ref('bookings', key));
-        if (asTeacher) b.delete(ref('notes', key));
+        b.set(ref('slots', key), { taken: true, at: now });
+        var bk = { code: code, sid: sid, student: info.student, parent: info.parent || '', phone: info.phone || '', mode: info.mode || '', topic: info.topic || '', at: now };
+        if (manual) bk.manual = true;
+        b.set(ref('bookings', key), bk);
+        if (!manual) {
+          b.set(ref('codes', code), { key: key, sid: sid, student: bk.student, parent: bk.parent, phone: bk.phone, mode: bk.mode, topic: bk.topic, at: now });
+          b.set(ref('counts', sid), { n: n + 1 });
+        }
+        try { await b.commit(); } catch (e) { throw asTaken(e); }
+        return { code: code };
+      },
+      lookup: async function(code){
+        try {
+          var s = await m.fs.getDoc(ref('codes', code));
+          return s.exists() ? s.data() : null;
+        } catch (e) { if (e && e.code === 'permission-denied') return null; throw e; }
+      },
+      cancelByCode: async function(code, d){
+        var n = await countOf(d.sid);
+        var b = m.fs.writeBatch(fdb);
+        b.delete(ref('slots', d.key)); b.delete(ref('bookings', d.key)); b.delete(ref('codes', code));
+        b.set(ref('counts', d.sid), { n: Math.max(0, n - 1) });
+        try { await b.commit(); } catch (e) { throw asTaken(e); }
+      },
+      moveByCode: async function(code, d, newKey){
+        var now = Date.now();
+        var b = m.fs.writeBatch(fdb);
+        b.delete(ref('slots', d.key)); b.delete(ref('bookings', d.key));
+        b.set(ref('slots', newKey), { taken: true, at: now });
+        b.set(ref('bookings', newKey), { code: code, sid: d.sid, student: d.student, parent: d.parent || '', phone: d.phone || '', mode: d.mode || '', topic: d.topic || '', at: now });
+        b.update(ref('codes', code), { key: newKey });
+        try { await b.commit(); } catch (e) { throw asTaken(e); }
+      },
+      /* 교사: 예약 삭제 */
+      cancel: async function(key, bk){
+        var b = m.fs.writeBatch(fdb);
+        b.delete(ref('slots', key)); b.delete(ref('bookings', key)); b.delete(ref('notes', key));
+        if (bk && bk.code) b.delete(ref('codes', bk.code));
+        if (bk && bk.sid) { var n = await countOf(bk.sid); b.set(ref('counts', bk.sid), { n: Math.max(0, n - 1) }); }
         await b.commit();
       },
       saveConfig: function(c){ return m.fs.setDoc(ref('config', 'main'), c); },
@@ -302,8 +388,7 @@ window.APP_CONFIG = {
   }
 
   function makeDemo(){
-    var K = 'pc-demo-v2', UK = 'pc-demo-uid', st = null, uid = null, H = null;
-    function rnd(){ return 'd' + Math.random().toString(36).slice(2, 10); }
+    var K = 'pc-demo-v3', st = null, H = null;
     function seedDates(){
       var d = new Date(); d.setHours(0, 0, 0, 0);
       d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
@@ -313,51 +398,40 @@ window.APP_CONFIG = {
     }
     function sample(dates){
       var rows = [[0,'15:00','김서준','김OO','대면','학습 태도와 수행평가 준비'],[0,'15:20','이하윤','이OO','전화','진로 고민'],[1,'16:00','박지우','박OO','화상',''],[2,'15:40','최도윤','최OO','대면','교우 관계'],[3,'16:20','정서아','정OO','대면','독서 습관']];
-      var sl = {}, bk = {}, nt = {}, now = Date.now();
-      rows.forEach(function(r){
-        var key = dates[r[0]] + '_' + r[1].replace(':', '');
-        sl[key] = { taken: true, uid: 'sample', at: now };
-        bk[key] = { uid: 'sample', student: r[2], parent: r[3], phone: '010-0000-0000', mode: r[4], topic: r[5], at: now };
+      var sl = {}, bk = {}, nt = {}, cd = {}, ct = {}, now = Date.now();
+      rows.forEach(function(r, i){
+        var key = dates[r[0]] + '_' + r[1].replace(':', ''), code = 'DEMO222' + (i + 1), sid = 'sample-' + i;
+        sl[key] = { taken: true, at: now };
+        bk[key] = { code: code, sid: sid, student: r[2], parent: r[3], phone: '010-0000-0000', mode: r[4], topic: r[5], at: now };
+        cd[code] = { key: key, sid: sid, student: r[2], parent: r[3], phone: '010-0000-0000', mode: r[4], topic: r[5], at: now };
+        ct[sid] = 1;
       });
       var k0 = dates[0] + '_1500', k1 = dates[0] + '_1520';
       nt[k0] = { status: 'done', follow: true, memo: '수행평가 일정을 함께 정리함. 다음 달에 진행 상황을 다시 확인하기로 함.', updated: now };
       nt[k1] = { status: 'noshow', follow: false, memo: '', updated: now };
-      return { slots: sl, bookings: bk, notes: nt };
+      return { slots: sl, bookings: bk, notes: nt, codes: cd, counts: ct };
     }
     function load(){
       var s = null;
       try { s = JSON.parse(localStorage.getItem(K)); } catch (e) {}
       if (!s) {
         var dates = seedDates(), sm = sample(dates);
-        s = { config: { title: '2학기 학부모 상담 주간', notice: '체험용 예시 안내입니다. 상담 장소와 준비물을 여기에 적어 주세요.', dates: dates, start: '15:00', end: '17:40', duration: 20, blocked: [dates[4] + '_1500'] }, slots: sm.slots, bookings: sm.bookings, notes: sm.notes };
+        s = { config: { title: '2학기 학부모 상담 주간', notice: '체험용 예시 안내입니다. 상담 장소와 준비물을 여기에 적어 주세요.', dates: dates, start: '15:00', end: '17:40', duration: 20, maxPerStudent: 1, blocked: [dates[4] + '_1500'] }, slots: sm.slots, bookings: sm.bookings, notes: sm.notes, codes: sm.codes, counts: sm.counts };
       }
       return s;
     }
     function save(){ try { localStorage.setItem(K, JSON.stringify(st)); } catch (e) {} }
     function emit(){
       if (!H) return;
-      H.config(st.config);
-      H.slots(JSON.parse(JSON.stringify(st.slots)));
-      var b = {};
-      Object.keys(st.bookings).forEach(function(k){ if (ROLE === 'teacher' || st.bookings[k].uid === uid) b[k] = st.bookings[k]; });
-      H.bookings(b);
-      if (ROLE === 'teacher') H.notes(JSON.parse(JSON.stringify(st.notes)));
+      H.config(clone(st.config));
+      H.slots(clone(st.slots));
+      if (ROLE === 'teacher') { H.bookings(clone(st.bookings)); H.notes(clone(st.notes)); }
     }
     function commit(){ save(); emit(); }
-    function add(key, info, manual){
-      if (st.slots[key]) throw { code: 'taken' };
-      var now = Date.now();
-      st.slots[key] = { taken: true, uid: uid, at: now };
-      st.bookings[key] = { uid: uid, student: info.student, parent: info.parent || '', phone: info.phone || '', mode: info.mode || '', topic: info.topic || '', at: now };
-      if (manual) st.bookings[key].manual = true;
-      commit();
-    }
     return {
       mode: 'demo',
       start: async function(h){
-        H = h;
-        try { uid = localStorage.getItem(UK); if (!uid) { uid = rnd(); localStorage.setItem(UK, uid); } } catch (e) { uid = rnd(); }
-        st = load(); save();
+        H = h; st = load(); save();
         window.addEventListener('storage', function(ev){ if (ev.key === K) { st = load(); emit(); } });
         if (ROLE === 'teacher') h.user('체험 모드');
         h.state('loading');
@@ -366,21 +440,55 @@ window.APP_CONFIG = {
       refresh: function(){ emit(); },
       reset: function(){ try { localStorage.removeItem(K); } catch (e) {} st = load(); commit(); },
       signIn: async function(){}, signOut: async function(){},
-      book: async function(key, info){ add(key, info, false); },
-      manualBook: async function(key, info){ add(key, info, true); },
-      cancel: async function(key, asTeacher){
-        delete st.slots[key]; delete st.bookings[key];
-        if (asTeacher) delete st.notes[key];
+      book: async function(key, info, manual){
+        if (st.slots[key]) throw { code: 'taken' };
+        var max = +(st.config.maxPerStudent || 1), sid = '', code = '', now = Date.now();
+        if (!manual) {
+          sid = await sidOf(info.student);
+          var n = st.counts[sid] || 0;
+          if (n >= max) throw { code: 'limit', n: n, max: max };
+          code = genCode();
+        }
+        st.slots[key] = { taken: true, at: now };
+        var bk = { code: code, sid: sid, student: info.student, parent: info.parent || '', phone: info.phone || '', mode: info.mode || '', topic: info.topic || '', at: now };
+        if (manual) bk.manual = true;
+        st.bookings[key] = bk;
+        if (!manual) {
+          st.codes[code] = { key: key, sid: sid, student: bk.student, parent: bk.parent, phone: bk.phone, mode: bk.mode, topic: bk.topic, at: now };
+          st.counts[sid] = (st.counts[sid] || 0) + 1;
+        }
+        commit();
+        return { code: code };
+      },
+      lookup: async function(code){ return st.codes[code] ? clone(st.codes[code]) : null; },
+      cancelByCode: async function(code, d){
+        delete st.slots[d.key]; delete st.bookings[d.key]; delete st.codes[code];
+        st.counts[d.sid] = Math.max(0, (st.counts[d.sid] || 0) - 1);
         commit();
       },
-      saveConfig: async function(c){ st.config = JSON.parse(JSON.stringify(c)); commit(); },
+      moveByCode: async function(code, d, newKey){
+        if (st.slots[newKey]) throw { code: 'taken' };
+        var bk = st.bookings[d.key];
+        delete st.slots[d.key]; delete st.bookings[d.key];
+        st.slots[newKey] = { taken: true, at: Date.now() };
+        st.bookings[newKey] = bk;
+        st.codes[code].key = newKey;
+        commit();
+      },
+      cancel: async function(key, bk){
+        delete st.slots[key]; delete st.bookings[key]; delete st.notes[key];
+        if (bk && bk.code) delete st.codes[bk.code];
+        if (bk && bk.sid) st.counts[bk.sid] = Math.max(0, (st.counts[bk.sid] || 0) - 1);
+        commit();
+      },
+      saveConfig: async function(c){ st.config = clone(c); commit(); },
       setBlocked: async function(list){ st.config.blocked = list.slice(); commit(); },
-      saveNote: async function(key, data){ st.notes[key] = JSON.parse(JSON.stringify(data)); commit(); }
+      saveNote: async function(key, data){ st.notes[key] = clone(data); commit(); }
     };
   }
 
   /* =====================================================================
-     화면
+     화면 공통
      ===================================================================== */
   function setTitle(){
     $('#title').textContent = (cfg && cfg.title) || '학부모 상담 일정';
@@ -397,16 +505,16 @@ window.APP_CONFIG = {
     } else if (ROLE === 'teacher' && (phase === 'ready' || phase === 'denied')) {
       el.innerHTML = '<span>' + esc(teacherEmail) + '</span><button class="btn" id="btn-logout">로그아웃</button>';
     } else el.innerHTML = '';
-    $('#demo').innerHTML = DEMO ? '<div class="demo">체험 모드입니다. 위쪽 탭으로 학부모 화면과 교사 화면을 바꿔 볼 수 있고, 예시 예약이 미리 들어 있습니다. 입력한 내용은 이 브라우저에만 저장됩니다. 실제로 쓰려면 index.html 아래쪽 Firebase 설정을 채워 주세요.</div>' : '';
+    $('#demo').innerHTML = DEMO ? '<div class="demo">체험 모드입니다. 위쪽 탭으로 학부모 화면과 교사 화면을 바꿔 볼 수 있고, 예시 예약이 들어 있습니다. 예시 확인 코드 <b>DEMO2221</b>로 학부모 화면에서 조회·변경·취소를 시험해 보세요. 입력한 내용은 이 브라우저에만 저장됩니다. 실제로 쓰려면 index.html 아래쪽 Firebase 설정을 채워 주세요.</div>' : '';
   }
   function setRole(r){
     if (r === ROLE) return;
-    ROLE = r; seen = {}; phase = 'loading'; selKey = null; tKey = null; armedCancel = false; banner('');
+    ROLE = r; seen = {}; phase = 'loading'; selKey = null; tKey = null; armedCancel = false; moving = null; armedCode = null; justBooked = null; banner('');
     renderAll();
     setTimeout(function(){ api.refresh(); }, 0);
   }
   function resetDemo(){
-    selKey = null; tKey = null; armedCancel = false; tSettingsInit = false; banner('');
+    selKey = null; tKey = null; armedCancel = false; tSettingsInit = false; moving = null; armedCode = null; justBooked = null; myCodes = []; mine = {}; saveCodes(); banner('');
     api.reset(); renderMain(true); toast('예시 데이터로 되돌렸습니다.');
   }
   function renderAll(){ setTitle(); renderHeader(); renderMain(true); }
@@ -427,7 +535,6 @@ window.APP_CONFIG = {
     }
     if (ROLE === 'teacher') renderTeacher(full); else renderParent(full);
   }
-  var errText = '';
   function onData(){
     if (phase !== 'ready') return;
     setTitle();
@@ -439,7 +546,7 @@ window.APP_CONFIG = {
   }
 
   /* ---------- 학부모 ---------- */
-  function myKeys(){ return Object.keys(bookings).filter(function(k){ return slots[k]; }).sort(); }
+  function myKeyMap(){ var o = {}; Object.keys(mine).forEach(function(c){ if (slots[mine[c].key]) o[mine[c].key] = c; }); return o; }
   function pickDefaultDate(){
     var ds = sortedDates(), ts = timesOf(cfg);
     for (var i = 0; i < ds.length; i++) for (var j = 0; j < ts.length; j++) {
@@ -447,6 +554,18 @@ window.APP_CONFIG = {
       if (!isPast(ds[i], ts[j]) && !isBooked(k) && !isBlocked(k)) return ds[i];
     }
     return ds[0] || null;
+  }
+  async function loadMine(){
+    var codes = myCodes.slice(), res = {}, keep = [];
+    var out = await Promise.all(codes.map(function(c){ return api.lookup(c).catch(function(){ return undefined; }); }));
+    codes.forEach(function(c, i){
+      var d = out[i];
+      if (d === undefined) { keep.push(c); return; }
+      if (d && slots[d.key]) { res[c] = d; keep.push(c); }
+    });
+    myCodes = keep; saveCodes(); mine = res;
+    if (moving && !mine[moving]) moving = null;
+    renderMine(); renderMoving(); renderSlots(); renderForm();
   }
   function renderParent(full){
     var main = $('#main');
@@ -459,24 +578,46 @@ window.APP_CONFIG = {
       main.innerHTML =
         '<div class="panel">' +
           (cfg.notice ? '<div class="notice">' + esc(cfg.notice) + '</div>' : '') +
+          '<div id="p-result"></div>' +
           '<div id="p-mine"></div>' +
+          '<details class="lookup" id="p-lookup"><summary>예약 확인 코드로 조회 · 변경 · 취소</summary>' +
+            '<div class="row" style="margin-top:10px"><input id="lk-code" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="예: ABCD-2345" style="max-width:220px"><button class="btn" id="lk-go">조회</button></div>' +
+            '<p class="sub">예약할 때 받은 8자리 코드를 입력하면 다른 기기에서도 예약을 확인하고 바꿀 수 있어요.</p></details>' +
+          '<div id="p-moving"></div>' +
           '<h2>1. 날짜 선택</h2><div class="datetabs" id="p-dates"></div>' +
           '<h2>2. 시간 선택 <span class="sub" id="p-len"></span></h2><div class="slots" id="p-slots"></div>' +
           '<div id="p-form"></div>' +
         '</div>';
-      renderForm();
+      renderResult(); renderForm();
     }
-    renderMine(); renderDates(); renderSlots();
+    renderMine(); renderMoving(); renderDates(); renderSlots();
+  }
+  function renderResult(){
+    var el = $('#p-result'); if (!el) return;
+    if (!justBooked) { el.innerHTML = ''; return; }
+    el.innerHTML =
+      '<div class="result"><h2>예약이 완료되었습니다</h2>' +
+      '<div><b>' + esc(whenText(justBooked.key)) + '</b></div>' +
+      '<div class="codebox"><span class="code">' + esc(fmtCode(justBooked.code)) + '</span><button class="btn" data-copycode="' + esc(justBooked.code) + '">코드 복사</button></div>' +
+      '<p class="sub" style="margin:0">이 확인 코드로 어느 기기에서든 예약을 변경하거나 취소할 수 있습니다. 화면을 캡처하거나 복사해서 보관해 주세요.</p>' +
+      '<div><button class="btn primary" id="res-ok">확인했습니다</button></div></div>';
   }
   function renderMine(){
     var el = $('#p-mine'); if (!el) return;
-    var ks = myKeys();
-    if (!ks.length) { el.innerHTML = ''; return; }
-    el.innerHTML = '<h2>내 예약</h2><div class="mine-list">' + ks.map(function(k){
-      var p = splitKey(k);
-      return '<div class="mine-item"><span><b>' + esc(fd(p.date)) + ' ' + esc(p.time) + '–' + esc(endTime(p.time)) + '</b> · ' + esc(bookings[k].student) + ' 학생</span>' +
-        '<button class="btn danger" data-cancel="' + esc(k) + '">예약 취소</button></div>';
+    var codes = myCodes.filter(function(c){ return mine[c] && slots[mine[c].key]; });
+    if (!codes.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<h2>내 예약</h2><div class="mine-list">' + codes.map(function(c){
+      var d = mine[c], armed = armedCode === c;
+      return '<div class="mine-item"><span><b>' + esc(whenText(d.key)) + '</b> · ' + esc(d.student) + ' 학생' + (d.mode ? ' · ' + esc(d.mode) : '') +
+        ' <span class="sub">코드 ' + esc(fmtCode(c)) + '</span></span>' +
+        '<span class="row"><button class="btn" data-move="' + esc(c) + '">시간 변경</button>' +
+        '<button class="btn danger' + (armed ? ' armed' : '') + '" data-cancelcode="' + esc(c) + '">' + (armed ? '한 번 더 누르면 취소됩니다' : '예약 취소') + '</button></span></div>';
     }).join('') + '</div>';
+  }
+  function renderMoving(){
+    var el = $('#p-moving'); if (!el) return;
+    if (!moving || !mine[moving]) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="notice">' + esc(mine[moving].student) + ' 학생의 예약 시간을 바꿉니다. 아래에서 새 날짜와 시간을 고르세요. <button class="btn" id="mv-cancel" style="margin-left:6px">변경 취소</button></div>';
   }
   function renderDates(){
     var el = $('#p-dates'); if (!el) return;
@@ -487,9 +628,10 @@ window.APP_CONFIG = {
   function renderSlots(){
     var el = $('#p-slots'); if (!el) return;
     $('#p-len').textContent = '· 1회 ' + (+cfg.duration || 20) + '분';
+    var mk = myKeyMap();
     el.innerHTML = timesOf(cfg).map(function(t){
       var k = keyOf(selDate, t), cls = 'slot', label, dis = true;
-      if (bookings[k] && slots[k]) { label = '내 예약'; cls += ' mine'; }
+      if (mk[k]) { label = '내 예약'; cls += ' mine'; }
       else if (isBooked(k)) label = '마감';
       else if (isBlocked(k)) label = '불가';
       else if (isPast(selDate, t)) label = '지남';
@@ -499,12 +641,20 @@ window.APP_CONFIG = {
   }
   function renderForm(){
     var el = $('#p-form'); if (!el) return;
+    if (moving && mine[moving]) {
+      if (!selKey) { el.innerHTML = '<p class="sub">새 시간을 고르면 변경 버튼이 나타납니다.</p>'; return; }
+      el.innerHTML =
+        '<h2>3. 변경 확인</h2><div class="panel" style="background:var(--surface2);border-color:transparent">' +
+        '<div>기존 <b>' + esc(whenText(mine[moving].key)) + '</b><br>새 시간 <b>' + esc(whenText(selKey)) + '</b></div>' +
+        '<div class="row"><button class="btn primary" id="mv-submit">이 시간으로 변경</button><button class="btn" id="f-clear">선택 취소</button></div></div>';
+      return;
+    }
     if (!selKey) { el.innerHTML = '<p class="sub">시간을 고르면 신청 양식이 나타납니다.</p>'; return; }
-    var p = splitKey(selKey);
+    var max = maxPer();
     el.innerHTML =
       '<h2>3. 신청 정보</h2>' +
       '<div id="bookform" class="panel" style="background:var(--surface2);border-color:transparent">' +
-      '<div><b>' + esc(fd(p.date)) + ' ' + esc(p.time) + '–' + esc(endTime(p.time)) + '</b></div>' +
+      '<div><b>' + esc(whenText(selKey)) + '</b></div>' +
       '<div class="fgrid">' +
         '<label class="f">학생 이름<input id="f-student" required maxlength="20" autocomplete="off"></label>' +
         '<label class="f">보호자 성함<input id="f-parent" required maxlength="20" autocomplete="off"></label>' +
@@ -512,6 +662,7 @@ window.APP_CONFIG = {
         '<label class="f">상담 방식<select id="f-mode">' + MODES.map(function(x){ return '<option>' + x + '</option>'; }).join('') + '</select></label>' +
       '</div>' +
       '<label class="f">상담하고 싶은 내용 (선택)<textarea id="f-topic" maxlength="300" placeholder="학교생활, 학습, 진로 등 미리 말씀해 주시면 준비하겠습니다."></textarea></label>' +
+      '<p class="sub" style="margin:0">학생 1명당 최대 ' + max + '회까지 예약할 수 있습니다.</p>' +
       '<div class="row"><button class="btn primary" type="button" id="f-submit">예약하기</button><button class="btn" type="button" id="f-clear">선택 취소</button></div>' +
       '</div>';
   }
@@ -527,11 +678,14 @@ window.APP_CONFIG = {
     var key = selKey;
     var info = { student: student, parent: parent, phone: $('#f-phone').value.trim(), mode: $('#f-mode').value, topic: $('#f-topic').value.trim() };
     try {
-      await api.book(key, info);
+      var r = await api.book(key, info, false);
       banner('');
+      myCodes.push(r.code); saveCodes();
+      justBooked = { code: r.code, key: key };
       selKey = null; submitting = false;
-      toast('예약이 완료되었습니다.');
+      await loadMine();
       renderMain(true);
+      var res = $('#p-result'); if (res && res.scrollIntoView) res.scrollIntoView({ block: 'start', behavior: 'smooth' });
     } catch (e) {
       submitting = false;
       fail(e);
@@ -539,9 +693,45 @@ window.APP_CONFIG = {
       else if ($('#f-submit')) $('#f-submit').disabled = false;
     }
   }
-  async function cancelMine(key){
-    try { await api.cancel(key, false); toast('예약을 취소했습니다.'); banner(''); }
-    catch (e) { fail(e); }
+  async function submitMove(){
+    if (!selKey || !moving || submitting || !mine[moving]) return;
+    var btn = $('#mv-submit'); if (btn) btn.disabled = true;
+    submitting = true;
+    var code = moving, d = mine[code], key = selKey;
+    try {
+      await api.moveByCode(code, d, key);
+      banner(''); moving = null; selKey = null; submitting = false;
+      toast('예약 시간을 변경했습니다.');
+      await loadMine(); renderMain(true);
+    } catch (e) {
+      submitting = false; fail(e);
+      if (e && e.code === 'taken') { selKey = null; renderMain(true); }
+      else if ($('#mv-submit')) $('#mv-submit').disabled = false;
+    }
+  }
+  async function cancelCode(code){
+    if (armedCode !== code) { armedCode = code; renderMine(); return; }
+    armedCode = null;
+    try {
+      await api.cancelByCode(code, mine[code]);
+      myCodes = myCodes.filter(function(c){ return c !== code; }); saveCodes();
+      delete mine[code];
+      if (justBooked && justBooked.code === code) justBooked = null;
+      if (moving === code) moving = null;
+      banner(''); toast('예약을 취소했습니다.');
+      renderMain(true);
+    } catch (e) { fail(e); }
+  }
+  async function doLookup(){
+    var c = normCode($('#lk-code').value);
+    if (c.length !== 8) { toast('확인 코드는 8자리입니다.'); return; }
+    try {
+      var d = await api.lookup(c);
+      if (!d || !slots[d.key]) { toast('일치하는 예약을 찾지 못했습니다. 코드를 다시 확인해 주세요.'); return; }
+      if (myCodes.indexOf(c) < 0) { myCodes.push(c); saveCodes(); }
+      mine[c] = d; $('#lk-code').value = '';
+      banner(''); renderMine(); renderSlots(); toast('예약을 불러왔습니다.');
+    } catch (e) { fail(e); }
   }
 
   /* ---------- 교사 ---------- */
@@ -596,7 +786,7 @@ window.APP_CONFIG = {
     }).join('');
     el.innerHTML =
       '<div class="row" style="justify-content:space-between"><h2>상담 일정표</h2><button class="btn" id="t-copy">예약 목록 복사</button></div>' +
-      '<div class="summary"><span>예약 <b>' + s.booked + '/' + s.total + '</b></span><span>완료 <b>' + s.done + '</b></span><span>불참 <b>' + s.noshow + '</b></span><span>후속 조치 <b>' + s.follow + '</b></span></div>' +
+      '<div class="summary"><span>예약 <b>' + s.booked + '/' + s.total + '</b></span><span>완료 <b>' + s.done + '</b></span><span>불참 <b>' + s.noshow + '</b></span><span>후속 조치 <b>' + s.follow + '</b></span><span>학생당 예약 <b>' + maxPer() + '회</b></span></div>' +
       '<div class="legend"><span><i style="background:var(--accent-soft)"></i>예약됨</span><span><i style="background:var(--done-soft)"></i>완료</span><span><i style="background:var(--warn-soft)"></i>불참</span><span><i style="background:var(--surface2)"></i>불가</span></div>' +
       '<div class="tablewrap" id="t-grid"><table class="grid"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
       '<div id="copybox"></div>';
@@ -605,11 +795,11 @@ window.APP_CONFIG = {
     var el = $('#t-detail'); if (!el) return;
     if (!tKey) { el.style.display = 'none'; el.innerHTML = ''; return; }
     el.style.display = '';
-    var p = splitKey(tKey), head = '<div class="row" style="justify-content:space-between"><h3>' + esc(fd(p.date)) + ' ' + esc(p.time) + '–' + esc(endTime(p.time)) + '</h3><button class="btn" id="t-close">닫기</button></div>';
+    var head = '<div class="row" style="justify-content:space-between"><h3>' + esc(whenText(tKey)) + '</h3><button class="btn" id="t-close">닫기</button></div>';
     if (isBooked(tKey)) {
       var s = bookings[tKey] || {}, n = noteOf(tKey), st = n.status || 'scheduled';
       el.innerHTML = head +
-        '<dl class="info"><dt>학생</dt><dd>' + esc(s.student || '-') + '</dd><dt>보호자</dt><dd>' + esc(s.parent || '-') + '</dd><dt>연락처</dt><dd>' + esc(s.phone || '-') + '</dd><dt>방식</dt><dd>' + esc(s.mode || '-') + '</dd><dt>희망 내용</dt><dd>' + esc(s.topic || '-') + '</dd></dl>' +
+        '<dl class="info"><dt>학생</dt><dd>' + esc(s.student || '-') + '</dd><dt>보호자</dt><dd>' + esc(s.parent || '-') + '</dd><dt>연락처</dt><dd>' + esc(s.phone || '-') + '</dd><dt>방식</dt><dd>' + esc(s.mode || '-') + '</dd><dt>희망 내용</dt><dd>' + esc(s.topic || '-') + '</dd><dt>확인 코드</dt><dd>' + (s.code ? '<span style="font-family:var(--font-mono)">' + esc(fmtCode(s.code)) + '</span> <span class="sub">(학부모가 코드를 잃어버렸을 때 알려 주세요)</span>' : '-') + '</dd></dl>' +
         '<div class="radios" role="radiogroup" aria-label="상담 상태">' + Object.keys(STATUS).map(function(k){
           return '<label><input type="radio" name="t-status" value="' + k + '"' + (st === k ? ' checked' : '') + '>' + STATUS[k] + '</label>';
         }).join('') + '<label><input type="checkbox" id="t-follow"' + (n.follow ? ' checked' : '') + '>후속 조치 필요</label></div>' +
@@ -620,7 +810,7 @@ window.APP_CONFIG = {
       var blocked = isBlocked(tKey);
       el.innerHTML = head +
         (blocked ? '<p class="sub">이 시간은 학부모에게 \'불가\'로 보입니다.</p>' :
-        '<p class="sub">비어 있는 시간입니다. 전화로 받은 예약은 직접 넣을 수 있어요.</p>' +
+        '<p class="sub">비어 있는 시간입니다. 전화로 받은 예약은 직접 넣을 수 있어요. (직접 넣은 예약에는 확인 코드가 없고 예약 횟수에도 포함되지 않습니다)</p>' +
         '<div id="t-manual" class="fgrid"><label class="f">학생 이름<input id="m-student" required maxlength="20"></label>' +
         '<label class="f">보호자 성함<input id="m-parent" maxlength="20"></label>' +
         '<label class="f">연락처<input id="m-phone" type="tel" maxlength="20"></label>' +
@@ -632,7 +822,7 @@ window.APP_CONFIG = {
   function renderSettings(){
     var el = $('#t-settings-body'); if (!el) return;
     if (!tSettingsInit) {
-      if (cfg) draft = { title: cfg.title || '', notice: cfg.notice || '', dates: (cfg.dates || []).slice(), start: cfg.start || '15:00', end: cfg.end || '17:40', duration: +cfg.duration || 20 };
+      if (cfg) draft = { title: cfg.title || '', notice: cfg.notice || '', dates: (cfg.dates || []).slice(), start: cfg.start || '15:00', end: cfg.end || '17:40', duration: +cfg.duration || 20, max: +cfg.maxPerStudent || 1 };
       tSettingsInit = true;
     }
     el.innerHTML =
@@ -641,6 +831,7 @@ window.APP_CONFIG = {
         '<label class="f">시작 시각<input id="s-start" type="time" value="' + esc(draft.start) + '"></label>' +
         '<label class="f">마치는 시각<input id="s-end" type="time" value="' + esc(draft.end) + '"></label>' +
         '<label class="f">1회 시간<select id="s-dur">' + [15,20,25,30,40].map(function(m){ return '<option value="' + m + '"' + (+draft.duration === m ? ' selected' : '') + '>' + m + '분</option>'; }).join('') + '</select></label>' +
+        '<label class="f">학생당 예약 가능 횟수<select id="s-max">' + [1,2,3,4,5].map(function(m){ return '<option value="' + m + '"' + (+draft.max === m ? ' selected' : '') + '>' + m + '회</option>'; }).join('') + '</select></label>' +
       '</div>' +
       '<label class="f">학부모 안내 문구 (선택)<textarea id="s-notice" maxlength="400" placeholder="상담 장소, 준비물, 늦을 때 연락처 등">' + esc(draft.notice) + '</textarea></label>' +
       '<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:.85rem;color:var(--muted);font-weight:500">상담 날짜</span>' +
@@ -671,13 +862,14 @@ window.APP_CONFIG = {
     draft.start = $('#s-start').value;
     draft.end = $('#s-end').value;
     draft.duration = +$('#s-dur').value;
+    draft.max = +$('#s-max').value;
   }
   async function saveSettings(){
     readDraft();
     if (!draft.dates.length) { toast('상담 날짜를 하나 이상 추가해 주세요.'); return; }
     if (!draft.start || !draft.end || toMin(draft.end) - toMin(draft.start) < draft.duration) { toast('시작·종료 시각과 1회 시간을 확인해 주세요.'); return; }
     try {
-      await api.saveConfig({ title: draft.title, notice: draft.notice, dates: draft.dates.slice().sort(), start: draft.start, end: draft.end, duration: draft.duration, blocked: (cfg && cfg.blocked) || [] });
+      await api.saveConfig({ title: draft.title, notice: draft.notice, dates: draft.dates.slice().sort(), start: draft.start, end: draft.end, duration: draft.duration, maxPerStudent: draft.max, blocked: (cfg && cfg.blocked) || [] });
       banner(''); toast('설정을 저장했습니다.');
     } catch (e) { fail(e); }
   }
@@ -690,13 +882,13 @@ window.APP_CONFIG = {
   async function cancelBooking(){
     if (!armedCancel) { armedCancel = true; renderDetail(); return; }
     var k = tKey; armedCancel = false;
-    try { await api.cancel(k, true); banner(''); toast('예약을 삭제했습니다.'); renderDetail(); }
+    try { await api.cancel(k, bookings[k] || {}); banner(''); toast('예약을 삭제했습니다.'); renderDetail(); }
     catch (e) { fail(e); }
   }
   async function manualBook(){
     var info = { student: $('#m-student').value.trim(), parent: $('#m-parent').value.trim(), phone: $('#m-phone').value.trim(), mode: $('#m-mode').value, topic: '' };
     if (!info.student) { toast('학생 이름을 입력해 주세요.'); $('#m-student').focus(); return; }
-    try { await api.manualBook(tKey, info); banner(''); toast('예약을 넣었습니다.'); renderDetail(); }
+    try { await api.book(tKey, info, true); banner(''); toast('예약을 넣었습니다.'); renderDetail(); }
     catch (e) { fail(e); }
   }
   async function toggleBlock(){
@@ -737,14 +929,27 @@ window.APP_CONFIG = {
     var t = ev.target.closest('button'); if (!t) return;
     if (t.id === 'btn-login') { banner(''); Promise.resolve(api.signIn()).catch(function(e){ fail(e); }); return; }
     if (t.id === 'btn-logout' || t.id === 'btn-logout2') { Promise.resolve(api.signOut()).catch(function(){}); return; }
-    if (t.dataset.date) { selDate = t.dataset.date; selKey = null; renderDates(); renderSlots(); renderForm(); return; }
-    if (t.dataset.slot) { selKey = t.dataset.slot; renderSlots(); renderForm(); var f = $('#f-student'); if (f) f.focus(); return; }
-    if (t.id === 'f-submit') return submitBooking();
-    if (t.id === 'm-submit') return manualBook();
     if (t.dataset.role) return setRole(t.dataset.role);
     if (t.id === 'btn-reset') return resetDemo();
+    if (t.dataset.date) { selDate = t.dataset.date; selKey = null; renderDates(); renderSlots(); renderForm(); return; }
+    if (t.dataset.slot) { selKey = t.dataset.slot; renderSlots(); renderForm(); var f = $('#f-student'); if (f) f.focus(); return; }
     if (t.id === 'f-clear') { selKey = null; renderSlots(); renderForm(); return; }
-    if (t.dataset.cancel) return cancelMine(t.dataset.cancel);
+    if (t.id === 'f-submit') return submitBooking();
+    if (t.id === 'mv-submit') return submitMove();
+    if (t.id === 'mv-cancel') { moving = null; selKey = null; renderMoving(); renderSlots(); renderForm(); return; }
+    if (t.id === 'res-ok') { justBooked = null; renderResult(); return; }
+    if (t.dataset.copycode) return copyText(fmtCode(t.dataset.copycode));
+    if (t.id === 'lk-go') return doLookup();
+    if (t.dataset.move) {
+      var c = t.dataset.move; if (!mine[c]) return;
+      moving = c; selKey = null; armedCode = null;
+      selDate = splitKey(mine[c].key).date;
+      renderMine(); renderMoving(); renderDates(); renderSlots(); renderForm();
+      var mv = $('#p-moving'); if (mv && mv.scrollIntoView) mv.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
+    if (t.dataset.cancelcode) return cancelCode(t.dataset.cancelcode);
+    if (t.id === 'm-submit') return manualBook();
     if (t.dataset.cell) {
       tKey = t.dataset.cell; armedCancel = false; renderOverview(); renderDetail();
       var d = $('#t-detail'); if (d && d.scrollIntoView) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -762,21 +967,24 @@ window.APP_CONFIG = {
       if (draft.dates.indexOf(v) < 0) draft.dates.push(v);
       $('#s-date').value = ''; renderChips(); return;
     }
-    if (t.dataset.rmdate) { readDraft(); draft.dates = draft.dates.filter(function(d){ return d !== t.dataset.rmdate; }); renderChips(); return; }
+    if (t.dataset.rmdate) { readDraft(); draft.dates = draft.dates.filter(function(x){ return x !== t.dataset.rmdate; }); renderChips(); return; }
     if (t.id === 's-save') return saveSettings();
   });
   document.addEventListener('keydown', function(ev){
     if (ev.key !== 'Enter' || ev.isComposing || ev.target.tagName !== 'INPUT') return;
     if (ev.target.closest('#bookform')) { ev.preventDefault(); submitBooking(); }
     else if (ev.target.closest('#t-manual')) { ev.preventDefault(); manualBook(); }
+    else if (ev.target.id === 'lk-code') { ev.preventDefault(); doLookup(); }
   });
 
   /* ---------- 시작 ---------- */
-  function needList(){ return ROLE === 'teacher' ? ['config', 'slots', 'bookings', 'notes'] : ['config', 'slots', 'bookings']; }
+  function needList(){ return ROLE === 'teacher' ? ['config', 'slots', 'bookings', 'notes'] : ['config', 'slots']; }
   function mark(n){
     seen[n] = true;
-    if (phase === 'loading' && needList().every(function(x){ return seen[x]; })) { phase = 'ready'; renderAll(); }
-    else if (phase === 'ready') onData();
+    if (phase === 'loading' && needList().every(function(x){ return seen[x]; })) {
+      phase = 'ready'; renderAll();
+      if (ROLE === 'parent') loadMine();
+    } else if (phase === 'ready') onData();
   }
   var handlers = {
     config: function(c){ cfg = c; mark('config'); },
@@ -789,7 +997,6 @@ window.APP_CONFIG = {
       if (p === 'loading' || p === 'login' || p === 'denied') seen = {};
       if (p === 'login') { cfg = null; slots = {}; bookings = {}; notes = {}; tKey = null; }
       if (p === 'error') errText = errMsg(info);
-      if (p === 'error' && info && info.code) errText = errMsg(info);
       renderAll();
     }
   };
