@@ -181,6 +181,9 @@ window.APP_CONFIG = {
   var qs = new URLSearchParams(location.search);
   var ROLE = (qs.get('role') === 'teacher' || location.hash === '#teacher' || /\/teacher\/?$/.test(location.pathname)) ? 'teacher' : 'parent';
 
+  /* 반(교사)별 독립 공간: 교사 = 로그인한 Google 계정의 uid, 학부모 = 링크의 ?c= 값 */
+  var TID = DEMO ? 'demo' : (ROLE === 'teacher' ? '' : (qs.get('c') || ''));
+
   var cfg = null, slots = {}, bookings = {}, notes = {};
   var phase = 'loading', teacherEmail = '', seen = {}, submitting = false, errText = '';
   var selDate = null, selKey = null, tKey = null, armedCancel = false, tSettingsInit = false;
@@ -189,10 +192,11 @@ window.APP_CONFIG = {
 
   /* 학부모 화면 상태 */
   var myCodes = [];
-  try { myCodes = JSON.parse(localStorage.getItem('pc-codes') || '[]'); } catch (e) { myCodes = []; }
+  function codesKey(){ return 'pc-codes-' + (TID || 'none'); }
+  try { myCodes = JSON.parse(localStorage.getItem(codesKey()) || '[]'); } catch (e) { myCodes = []; }
   if (!Array.isArray(myCodes)) myCodes = [];
   var mine = {}, moving = null, armedCode = null, justBooked = null;
-  function saveCodes(){ try { localStorage.setItem('pc-codes', JSON.stringify(myCodes)); } catch (e) {} }
+  function saveCodes(){ try { localStorage.setItem(codesKey(), JSON.stringify(myCodes)); } catch (e) {} }
 
   /* ---------- 시간 계산 ---------- */
   function pad(n){ return (n < 10 ? '0' : '') + n; }
@@ -241,7 +245,7 @@ window.APP_CONFIG = {
   }
   async function sidOf(name){
     var norm = String(name).normalize('NFC').replace(/\s+/g, '').toLowerCase();
-    var salt = (FB.projectId || 'demo') + ':';
+    var salt = (FB.projectId || 'demo') + ':' + (TID || '') + ':';
     try {
       if (window.crypto && crypto.subtle && window.TextEncoder) {
         var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + norm));
@@ -287,17 +291,18 @@ window.APP_CONFIG = {
     var m = {}, unsubs = [], auth = null, fdb = null;
     function clearSubs(){ unsubs.forEach(function(u){ try { u(); } catch (e) {} }); unsubs = []; }
     function toMap(snap){ var o = {}; snap.forEach(function(d){ o[d.id] = d.data(); }); return o; }
-    function ref(col, id){ return m.fs.doc(fdb, col, id); }
+    function ref(col, id){ return m.fs.doc(fdb, 'classes', TID, col, id); }
+    function coll(name){ return m.fs.collection(fdb, 'classes', TID, name); }
     function subscribe(teacher, h){
       var err = function(e){
         if (teacher && e && e.code === 'permission-denied') h.state('denied');
         else h.state('error', e);
       };
       unsubs.push(m.fs.onSnapshot(ref('config', 'main'), function(s){ h.config(s.exists() ? s.data() : null); }, err));
-      unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'slots'), function(s){ h.slots(toMap(s)); }, err));
+      unsubs.push(m.fs.onSnapshot(coll('slots'), function(s){ h.slots(toMap(s)); }, err));
       if (teacher) {
-        unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'bookings'), function(s){ h.bookings(toMap(s)); }, err));
-        unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'notes'), function(s){ h.notes(toMap(s)); }, err));
+        unsubs.push(m.fs.onSnapshot(coll('bookings'), function(s){ h.bookings(toMap(s)); }, err));
+        unsubs.push(m.fs.onSnapshot(coll('notes'), function(s){ h.notes(toMap(s)); }, err));
       }
     }
     async function countOf(sid){
@@ -316,11 +321,13 @@ window.APP_CONFIG = {
         m.au.onAuthStateChanged(auth, function(u){
           clearSubs();
           if (ROLE === 'teacher') {
-            if (!u || u.isAnonymous) { h.state('login'); return; }
+            if (!u || u.isAnonymous) { TID = ''; h.state('login'); return; }
+            TID = u.uid;
             h.user(u.email || '');
             h.state('loading');
             subscribe(true, h);
           } else {
+            if (!TID) { h.state('nolink'); return; }
             if (!u) { m.au.signInAnonymously(auth).catch(function(e){ h.state('error', e); }); return; }
             h.state('loading');
             subscribe(false, h);
@@ -522,11 +529,15 @@ window.APP_CONFIG = {
     var main = $('#main');
     if (phase === 'loading') { main.innerHTML = '<div class="panel"><div class="empty">불러오는 중입니다.</div></div>'; return; }
     if (phase === 'login') {
-      main.innerHTML = '<div class="panel login"><h2>교사 로그인</h2><p class="sub">상담 일정을 관리하려면 선생님의 Google 계정으로 로그인해 주세요.</p><button class="btn primary" id="btn-login">Google로 로그인</button></div>';
+      main.innerHTML = '<div class="panel login"><h2>교사 로그인</h2><p class="sub">선생님의 Google 계정으로 로그인하면 우리 반 전용 상담 공간과 학부모용 링크가 만들어집니다. 다른 선생님의 일정은 보이지 않습니다.</p><button class="btn primary" id="btn-login">Google로 로그인</button></div>';
+      return;
+    }
+    if (phase === 'nolink') {
+      main.innerHTML = '<div class="panel login"><h2>예약 링크를 확인해 주세요</h2><p class="sub">이 주소에는 담임 선생님 정보가 없습니다. 선생님이 보내 주신 학부모용 링크로 다시 접속해 주세요.</p></div>';
       return;
     }
     if (phase === 'denied') {
-      main.innerHTML = '<div class="panel login"><h2>권한이 없는 계정입니다</h2><p class="sub">' + esc(teacherEmail) + ' 계정은 교사로 등록되어 있지 않습니다. 등록한 계정으로 다시 로그인해 주세요.</p><button class="btn primary" id="btn-logout2">다른 계정으로 로그인</button></div>';
+      main.innerHTML = '<div class="panel login"><h2>사용할 수 없는 계정입니다</h2><p class="sub">' + esc(teacherEmail) + ' 계정은 교사로 사용할 수 없습니다. 학교 계정 등 허용된 Google 계정으로 다시 로그인해 주세요.</p><button class="btn primary" id="btn-logout2">다른 계정으로 로그인</button></div>';
       return;
     }
     if (phase === 'error') {
@@ -852,9 +863,9 @@ window.APP_CONFIG = {
     var b = baseUrl();
     el.innerHTML =
       '<h2>링크 공유</h2>' +
-      '<div class="linkrow"><span>학부모용</span><input id="lk-parent" readonly value="' + esc(b) + '"><button class="btn" data-copyinput="lk-parent">복사</button></div>' +
+      '<div class="linkrow"><span>학부모용</span><input id="lk-parent" readonly value="' + esc(b + '?c=' + TID) + '"><button class="btn" data-copyinput="lk-parent">복사</button></div>' +
       '<div class="linkrow"><span>교사용</span><input id="lk-teacher" readonly value="' + esc(b + '?role=teacher') + '"><button class="btn" data-copyinput="lk-teacher">복사</button></div>' +
-      '<p class="sub">학부모용 링크만 학부모에게 보내세요. 교사용 링크는 등록된 선생님 Google 계정으로 로그인해야 열립니다.</p>';
+      '<p class="sub">학부모용 링크는 선생님마다 다릅니다. 우리 반 학부모에게는 위 학부모용 링크만 보내세요. 교사용 링크는 모든 선생님이 같은 주소이며, 각자 자기 Google 계정으로 로그인하면 자기 반 공간이 열립니다.</p>';
   }
   function readDraft(){
     draft.title = $('#s-title').value.trim();
@@ -994,7 +1005,7 @@ window.APP_CONFIG = {
     user: function(email){ teacherEmail = email; },
     state: function(p, info){
       phase = p;
-      if (p === 'loading' || p === 'login' || p === 'denied') seen = {};
+      if (p === 'loading' || p === 'login' || p === 'denied' || p === 'nolink') seen = {};
       if (p === 'login') { cfg = null; slots = {}; bookings = {}; notes = {}; tKey = null; }
       if (p === 'error') errText = errMsg(info);
       renderAll();
