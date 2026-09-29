@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="color-scheme" content="light dark">
+<title>학부모 상담 일정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f3f6f7; --surface:#ffffff; --surface2:#eaf0f2;
+  --ink:#15232b; --muted:#587079; --line:#d5dfe3;
+  --accent:#1c6a5b; --accent-ink:#ffffff; --accent-soft:#d9eee8;
+  --hi:#fff0a8; --hi-ink:#5b4a00;
+  --done:#2c5c9a; --done-soft:#dfeaf8;
+  --warn:#9a5208; --warn-soft:#fbe8d0;
+  --danger:#b3261e; --danger-soft:#fbe3e1;
+  --font-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1a1f; --surface:#17252c; --surface2:#1f3038;
+    --ink:#e6eef1; --muted:#93aab3; --line:#2c414a;
+    --accent:#5cc3ac; --accent-ink:#06211b; --accent-soft:#1c3c37;
+    --hi:#5a4d0c; --hi-ink:#fff0a8;
+    --done:#8db8ee; --done-soft:#1e3350;
+    --warn:#eeab5c; --warn-soft:#41300f;
+    --danger:#f29a93; --danger-soft:#4a1f1c;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55;min-height:100vh}
+[hidden]{display:none!important}
+.wrap{max-width:1040px;margin:0 auto;padding-inline:16px;padding-block:calc(22px + env(safe-area-inset-top,0px)) calc(56px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-size:1.5rem;line-height:1.25;margin:0;font-weight:700;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;font-size:.9rem}
+h2{font-size:1.05rem;margin:0;font-weight:600}
+h3{font-size:1rem;margin:0;font-weight:600}
+.hdr-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:var(--muted);font-size:.85rem}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.notice{background:var(--hi);color:var(--hi-ink);padding:10px 14px;border-radius:8px;font-size:.92rem;white-space:pre-wrap}
+.demo{background:var(--warn-soft);color:var(--warn);padding:10px 14px;border-radius:8px;font-size:.88rem}
+.err{background:var(--danger-soft);color:var(--danger);padding:10px 14px;border-radius:8px;font-size:.92rem}
+.empty{color:var(--muted);padding:18px 4px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;min-height:40px}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.danger.armed{background:var(--danger);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);font-weight:500;min-width:0}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;width:100%;min-width:0}
+textarea{resize:vertical;min-height:84px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.datetabs{display:flex;flex-wrap:wrap;gap:8px}
+.dtab{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;padding:8px 14px;border-radius:8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;line-height:1.25;min-width:72px}
+.dtab small{color:var(--muted);font-size:.75rem}
+.dtab[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.dtab[aria-pressed="true"] small{color:var(--accent-ink);opacity:.85}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.slot{font-family:var(--font-mono);font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 6px;border-radius:8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px}
+.slot small{font-family:var(--font-body);font-size:.72rem;color:var(--muted)}
+.slot:hover:not(:disabled){border-color:var(--accent)}
+.slot[aria-pressed="true"]{background:var(--hi);color:var(--hi-ink);border-color:var(--hi-ink)}
+.slot[aria-pressed="true"] small{color:var(--hi-ink)}
+.slot:disabled{cursor:not-allowed;background:var(--surface2);color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.slot:disabled small{text-decoration:none}
+.slot.mine{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);text-decoration:none}
+.mine-list{display:flex;flex-direction:column;gap:8px}
+.mine-item{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:var(--accent-soft);border-radius:8px;padding:10px 14px}
+.mine-item b{font-family:var(--font-mono);font-weight:500}
+.summary{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--muted);font-size:.9rem}
+.summary b{color:var(--ink);font-family:var(--font-mono);font-weight:500}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table.grid{border-collapse:collapse;width:100%;min-width:560px}
+.grid th,.grid td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;text-align:center;vertical-align:middle}
+.grid tr:last-child td,.grid tr:last-child th{border-bottom:0}
+.grid th:last-child,.grid td:last-child{border-right:0}
+.grid thead th{background:var(--surface2);padding:8px 6px;font-weight:600;font-size:.88rem}
+.grid tbody th{font-family:var(--font-mono);font-weight:500;font-size:.85rem;color:var(--muted);padding:0 10px;background:var(--surface2);position:sticky;left:0;white-space:nowrap}
+.cell{width:100%;min-height:52px;border:0;background:transparent;color:var(--ink);font:inherit;font-size:.85rem;cursor:pointer;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.cell:hover{background:var(--surface2)}
+.cell .nm{font-weight:600;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell.open{color:var(--muted)}
+.cell.booked{background:var(--accent-soft)}
+.cell.done{background:var(--done-soft)}
+.cell.noshow{background:var(--warn-soft)}
+.cell.blocked{background:repeating-linear-gradient(135deg,var(--surface2) 0 6px,var(--surface) 6px 12px);color:var(--muted)}
+.cell[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:-2px}
+.tag{font-size:.7rem;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--surface2);color:var(--muted)}
+.tag.follow{background:var(--hi);color:var(--hi-ink)}
+.tag.st-done{background:var(--done);color:var(--surface)}
+.tag.st-noshow{background:var(--warn);color:var(--surface)}
+dl.info{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+dl.info dt{color:var(--muted);font-size:.88rem}
+dl.info dd{margin:0;overflow-wrap:anywhere}
+.radios{display:flex;flex-wrap:wrap;gap:8px}
+.radios label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;min-height:40px}
+.radios input{width:auto;min-height:0}
+.radios label:has(input:checked){background:var(--accent-soft);border-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:99px;padding:4px 6px 4px 12px;font-size:.88rem}
+.chip button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:2px 6px;border-radius:99px}
+.chip button:hover{color:var(--danger)}
+details.settings>summary{cursor:pointer;font-weight:600;padding:2px 0}
+details.settings[open]>summary{margin-bottom:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:.9rem;z-index:20;max-width:calc(100vw - 32px)}
+.copybox{width:100%;min-height:120px;font-family:var(--font-mono);font-size:.82rem}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px;border:1px solid var(--line)}
+.linkrow{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+.linkrow span{font-size:.88rem;font-weight:600;white-space:nowrap}
+.linkrow input{font-family:var(--font-mono);font-size:.8rem}
+.tabs{display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:10px}
+.tab{border:0;background:transparent;color:var(--muted);font:inherit;font-weight:500;padding:7px 14px;border-radius:7px;cursor:pointer;min-height:36px}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.login{max-width:420px;margin:24px auto;text-align:center;align-items:center}
+@media (max-width:520px){.linkrow{grid-template-columns:1fr auto}.linkrow span{grid-column:1/-1}}
+@media (prefers-reduced-motion:no-preference){.btn,.slot,.cell,.dtab{transition:background .12s,border-color .12s}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header class="top">
+    <div>
+      <h1 id="title">학부모 상담 일정</h1>
+      <p class="sub" id="subtitle"></p>
+    </div>
+    <div class="hdr-actions" id="hdr-actions"></div>
+  </header>
+  <div id="demo"></div>
+  <div id="banner"></div>
+  <main id="main"></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- =====================================================================
+     여기만 수정하세요: Firebase 콘솔 > 프로젝트 설정 > 내 앱(웹)에서 복사한 값
+     (아직 넣지 않으면 '체험 모드'로 동작합니다. 체험 모드는 이 브라우저에만 저장됩니다.)
+     ===================================================================== -->
+<script>
+window.APP_CONFIG = {
+  firebase: {
+    apiKey: "AIzaSyALjA-C6YtRfZdb4HVmY5l2l1EVi5Fo8i0",
+    authDomain: "parent-consult.firebaseapp.com",
+    projectId: "parent-consult",
+    appId: "1:502791927367:web:c4d41ff4417d3aca22a362"
+  }
+};
+</script>
+
+<script>
+(function(){
+  'use strict';
+  var $ = function(s){ return document.querySelector(s); };
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var DOW = ['일','월','화','수','목','금','토'];
+  var STATUS = { scheduled:'예정', done:'상담 완료', noshow:'불참' };
+  var MODES = ['대면','전화','화상'];
+
+  var FB = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
+  var DEMO = !FB.apiKey || /^YOUR_/.test(FB.apiKey);
+  var qs = new URLSearchParams(location.search);
+  var ROLE = (qs.get('role') === 'teacher' || location.hash === '#teacher' || /\/teacher\/?$/.test(location.pathname)) ? 'teacher' : 'parent';
+
+  var cfg = null, slots = {}, bookings = {}, notes = {};
+  var phase = 'loading', teacherEmail = '', seen = {}, submitting = false;
+  var selDate = null, selKey = null, tKey = null, armedCancel = false, tSettingsInit = false;
+  var draft = { title:'', notice:'', dates:[], start:'15:00', end:'17:40', duration:20 };
+  var api = null;
+
+  /* ---------- 시간 계산 ---------- */
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function toMin(t){ var p = t.split(':'); return (+p[0]) * 60 + (+p[1]); }
+  function fromMin(m){ return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+  function parseD(s){ var p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function md(s){ var d = parseD(s); return (d.getMonth() + 1) + '/' + d.getDate(); }
+  function dowOf(s){ return DOW[parseD(s).getDay()]; }
+  function fd(s){ return md(s) + '(' + dowOf(s) + ')'; }
+  function timesOf(c){
+    var out = [];
+    if (!c || !c.start || !c.end) return out;
+    var s = toMin(c.start), e = toMin(c.end), d = +c.duration || 20;
+    for (var t = s; t + d <= e; t += d) out.push(fromMin(t));
+    return out;
+  }
+  function keyOf(date, time){ return date + '_' + time.replace(':', ''); }
+  function splitKey(k){ var i = k.indexOf('_'); var t = k.slice(i + 1); return { date: k.slice(0, i), time: t.slice(0, 2) + ':' + t.slice(2) }; }
+  function endTime(time){ return fromMin(toMin(time) + (+((cfg || draft).duration) || 20)); }
+  function isPast(date, time){
+    var d = parseD(date), p = time.split(':');
+    d.setHours(+p[0], +p[1], 0, 0);
+    return d.getTime() < Date.now();
+  }
+  function isBooked(k){ return !!slots[k]; }
+  function isBlocked(k){ return !!(cfg && cfg.blocked && cfg.blocked.indexOf(k) >= 0); }
+  function sortedDates(){ return ((cfg && cfg.dates) || []).slice().sort(); }
+
+  /* ---------- 알림 ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    var t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.hidden = true; }, 2800);
+  }
+  function banner(html, cls){ $('#banner').innerHTML = html ? '<div class="' + (cls || 'err') + '">' + html + '</div>' : ''; }
+  function fail(e){ banner(esc(errMsg(e))); toast(errMsg(e)); }
+  function errMsg(e){
+    var c = (e && e.code) || '';
+    if (c === 'taken') return '방금 다른 분이 예약했습니다. 다른 시간을 골라 주세요.';
+    if (c === 'permission-denied') return '저장할 수 없습니다. 이미 마감되었거나 권한이 없습니다.';
+    if (c === 'auth/operation-not-allowed') return 'Firebase 콘솔의 Authentication에서 이 로그인 방법(익명 또는 Google)을 사용 설정해야 합니다.';
+    if (c === 'auth/unauthorized-domain') return 'Firebase 콘솔 Authentication의 승인된 도메인에 이 주소(' + esc(location.hostname) + ')를 추가해야 합니다.';
+    if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return '로그인 창이 닫혔습니다. 다시 시도해 주세요.';
+    if (c === 'auth/popup-blocked') return '팝업이 차단되었습니다. 팝업을 허용한 뒤 다시 눌러 주세요.';
+    if (c === 'unavailable' || c === 'auth/network-request-failed') return '네트워크 연결을 확인해 주세요.';
+    return '저장하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+  async function copyText(text, fallbackEl){
+    try { await navigator.clipboard.writeText(text); toast('복사했습니다.'); }
+    catch (e) {
+      if (fallbackEl) { fallbackEl.focus(); fallbackEl.select(); }
+      toast('선택된 내용을 직접 복사해 주세요.');
+    }
+  }
+
+  /* =====================================================================
+     저장소 계층: firebase / 체험 모드(demo)
+     ===================================================================== */
+  function makeFirebase(){
+    var m = {}, unsubs = [], auth = null, fdb = null;
+    function clearSubs(){ unsubs.forEach(function(u){ try { u(); } catch (e) {} }); unsubs = []; }
+    function toMap(snap){ var o = {}; snap.forEach(function(d){ o[d.id] = d.data(); }); return o; }
+    function ref(col, id){ return m.fs.doc(fdb, col, id); }
+    function subscribe(teacher, uid, h){
+      var err = function(e){
+        if (teacher && e && e.code === 'permission-denied') h.state('denied');
+        else h.state('error', e);
+      };
+      unsubs.push(m.fs.onSnapshot(ref('config', 'main'), function(s){ h.config(s.exists() ? s.data() : null); }, err));
+      unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'slots'), function(s){ h.slots(toMap(s)); }, err));
+      var bq = teacher ? m.fs.collection(fdb, 'bookings') : m.fs.query(m.fs.collection(fdb, 'bookings'), m.fs.where('uid', '==', uid));
+      unsubs.push(m.fs.onSnapshot(bq, function(s){ h.bookings(toMap(s)); }, err));
+      if (teacher) unsubs.push(m.fs.onSnapshot(m.fs.collection(fdb, 'notes'), function(s){ h.notes(toMap(s)); }, err));
+    }
+    async function write(key, info, asManual){
+      var uid = auth.currentUser.uid, now = Date.now();
+      var b = m.fs.writeBatch(fdb);
+      b.set(ref('slots', key), { taken: true, uid: uid, at: now });
+      var bk = { uid: uid, student: info.student, parent: info.parent || '', phone: info.phone || '', mode: info.mode || '', topic: info.topic || '', at: now };
+      if (asManual) bk.manual = true;
+      b.set(ref('bookings', key), bk);
+      try { await b.commit(); }
+      catch (e) { if (e && e.code === 'permission-denied') throw { code: 'taken' }; throw e; }
+    }
+    return {
+      mode: 'firebase',
+      start: async function(h){
+        var base = 'https://www.gstatic.com/firebasejs/10.14.1/';
+        var mods = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+        m.app = mods[0]; m.au = mods[1]; m.fs = mods[2];
+        var app = m.app.initializeApp(FB);
+        auth = m.au.getAuth(app); fdb = m.fs.getFirestore(app);
+        m.au.onAuthStateChanged(auth, function(u){
+          clearSubs();
+          if (ROLE === 'teacher') {
+            if (!u || u.isAnonymous) { h.state('login'); return; }
+            h.user(u.email || '');
+            h.state('loading');
+            subscribe(true, u.uid, h);
+          } else {
+            if (!u) { m.au.signInAnonymously(auth).catch(function(e){ h.state('error', e); }); return; }
+            h.state('loading');
+            subscribe(false, u.uid, h);
+          }
+        }, function(e){ h.state('error', e); });
+      },
+      signIn: function(){ return m.au.signInWithPopup(auth, new m.au.GoogleAuthProvider()); },
+      signOut: function(){ return m.au.signOut(auth); },
+      book: function(key, info){ return write(key, info, false); },
+      manualBook: function(key, info){ return write(key, info, true); },
+      cancel: async function(key, asTeacher){
+        var b = m.fs.writeBatch(fdb);
+        b.delete(ref('slots', key)); b.delete(ref('bookings', key));
+        if (asTeacher) b.delete(ref('notes', key));
+        await b.commit();
+      },
+      saveConfig: function(c){ return m.fs.setDoc(ref('config', 'main'), c); },
+      setBlocked: function(list){ return m.fs.updateDoc(ref('config', 'main'), { blocked: list }); },
+      saveNote: function(key, data){ return m.fs.setDoc(ref('notes', key), data); }
+    };
+  }
+
+  function makeDemo(){
+    var K = 'pc-demo-v2', UK = 'pc-demo-uid', st = null, uid = null, H = null;
+    function rnd(){ return 'd' + Math.random().toString(36).slice(2, 10); }
+    function seedDates(){
+      var d = new Date(); d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
+      var out = [];
+      for (var i = 0; i < 5; i++) { out.push(d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())); d.setDate(d.getDate() + 1); }
+      return out;
+    }
+    function sample(dates){
+      var rows = [[0,'15:00','김서준','김OO','대면','학습 태도와 수행평가 준비'],[0,'15:20','이하윤','이OO','전화','진로 고민'],[1,'16:00','박지우','박OO','화상',''],[2,'15:40','최도윤','최OO','대면','교우 관계'],[3,'16:20','정서아','정OO','대면','독서 습관']];
+      var sl = {}, bk = {}, nt = {}, now = Date.now();
+      rows.forEach(function(r){
+        var key = dates[r[0]] + '_' + r[1].replace(':', '');
+        sl[key] = { taken: true, uid: 'sample', at: now };
+        bk[key] = { uid: 'sample', student: r[2], parent: r[3], phone: '010-0000-0000', mode: r[4], topic: r[5], at: now };
+      });
+      var k0 = dates[0] + '_1500', k1 = dates[0] + '_1520';
+      nt[k0] = { status: 'done', follow: true, memo: '수행평가 일정을 함께 정리함. 다음 달에 진행 상황을 다시 확인하기로 함.', updated: now };
+      nt[k1] = { status: 'noshow', follow: false, memo: '', updated: now };
+      return { slots: sl, bookings: bk, notes: nt };
+    }
+    function load(){
+      var s = null;
+      try { s = JSON.parse(localStorage.getItem(K)); } catch (e) {}
+      if (!s) {
+        var dates = seedDates(), sm = sample(dates);
+        s = { config: { title: '2학기 학부모 상담 주간', notice: '체험용 예시 안내입니다. 상담 장소와 준비물을 여기에 적어 주세요.', dates: dates, start: '15:00', end: '17:40', duration: 20, blocked: [dates[4] + '_1500'] }, slots: sm.slots, bookings: sm.bookings, notes: sm.notes };
+      }
+      return s;
+    }
+    function save(){ try { localStorage.setItem(K, JSON.stringify(st)); } catch (e) {} }
+    function emit(){
+      if (!H) return;
+      H.config(st.config);
+      H.slots(JSON.parse(JSON.stringify(st.slots)));
+      var b = {};
+      Object.keys(st.bookings).forEach(function(k){ if (ROLE === 'teacher' || st.bookings[k].uid === uid) b[k] = st.bookings[k]; });
+      H.bookings(b);
+      if (ROLE === 'teacher') H.notes(JSON.parse(JSON.stringify(st.notes)));
+    }
+    function commit(){ save(); emit(); }
+    function add(key, info, manual){
+      if (st.slots[key]) throw { code: 'taken' };
+      var now = Date.now();
+      st.slots[key] = { taken: true, uid: uid, at: now };
+      st.bookings[key] = { uid: uid, student: info.student, parent: info.parent || '', phone: info.phone || '', mode: info.mode || '', topic: info.topic || '', at: now };
+      if (manual) st.bookings[key].manual = true;
+      commit();
+    }
+    return {
+      mode: 'demo',
+      start: async function(h){
+        H = h;
+        try { uid = localStorage.getItem(UK); if (!uid) { uid = rnd(); localStorage.setItem(UK, uid); } } catch (e) { uid = rnd(); }
+        st = load(); save();
+        window.addEventListener('storage', function(ev){ if (ev.key === K) { st = load(); emit(); } });
+        if (ROLE === 'teacher') h.user('체험 모드');
+        h.state('loading');
+        setTimeout(emit, 0);
+      },
+      refresh: function(){ emit(); },
+      reset: function(){ try { localStorage.removeItem(K); } catch (e) {} st = load(); commit(); },
+      signIn: async function(){}, signOut: async function(){},
+      book: async function(key, info){ add(key, info, false); },
+      manualBook: async function(key, info){ add(key, info, true); },
+      cancel: async function(key, asTeacher){
+        delete st.slots[key]; delete st.bookings[key];
+        if (asTeacher) delete st.notes[key];
+        commit();
+      },
+      saveConfig: async function(c){ st.config = JSON.parse(JSON.stringify(c)); commit(); },
+      setBlocked: async function(list){ st.config.blocked = list.slice(); commit(); },
+      saveNote: async function(key, data){ st.notes[key] = JSON.parse(JSON.stringify(data)); commit(); }
+    };
+  }
+
+  /* =====================================================================
+     화면
+     ===================================================================== */
+  function setTitle(){
+    $('#title').textContent = (cfg && cfg.title) || '학부모 상담 일정';
+    $('#subtitle').textContent = ROLE === 'teacher' ? '교사 관리 화면' : '원하는 날짜와 시간을 골라 예약해 주세요';
+    document.title = ((cfg && cfg.title) || '학부모 상담 일정') + (ROLE === 'teacher' ? ' (교사)' : '');
+  }
+  function renderHeader(){
+    var el = $('#hdr-actions');
+    if (DEMO) {
+      el.innerHTML = '<div class="tabs" role="tablist">' +
+        '<button class="tab" role="tab" data-role="parent" aria-selected="' + (ROLE === 'parent') + '">학부모 화면</button>' +
+        '<button class="tab" role="tab" data-role="teacher" aria-selected="' + (ROLE === 'teacher') + '">교사 화면</button></div>' +
+        '<button class="btn" id="btn-reset">예시 초기화</button>';
+    } else if (ROLE === 'teacher' && (phase === 'ready' || phase === 'denied')) {
+      el.innerHTML = '<span>' + esc(teacherEmail) + '</span><button class="btn" id="btn-logout">로그아웃</button>';
+    } else el.innerHTML = '';
+    $('#demo').innerHTML = DEMO ? '<div class="demo">체험 모드입니다. 위쪽 탭으로 학부모 화면과 교사 화면을 바꿔 볼 수 있고, 예시 예약이 미리 들어 있습니다. 입력한 내용은 이 브라우저에만 저장됩니다. 실제로 쓰려면 index.html 아래쪽 Firebase 설정을 채워 주세요.</div>' : '';
+  }
+  function setRole(r){
+    if (r === ROLE) return;
+    ROLE = r; seen = {}; phase = 'loading'; selKey = null; tKey = null; armedCancel = false; banner('');
+    renderAll();
+    setTimeout(function(){ api.refresh(); }, 0);
+  }
+  function resetDemo(){
+    selKey = null; tKey = null; armedCancel = false; tSettingsInit = false; banner('');
+    api.reset(); renderMain(true); toast('예시 데이터로 되돌렸습니다.');
+  }
+  function renderAll(){ setTitle(); renderHeader(); renderMain(true); }
+  function renderMain(full){
+    var main = $('#main');
+    if (phase === 'loading') { main.innerHTML = '<div class="panel"><div class="empty">불러오는 중입니다.</div></div>'; return; }
+    if (phase === 'login') {
+      main.innerHTML = '<div class="panel login"><h2>교사 로그인</h2><p class="sub">상담 일정을 관리하려면 선생님의 Google 계정으로 로그인해 주세요.</p><button class="btn primary" id="btn-login">Google로 로그인</button></div>';
+      return;
+    }
+    if (phase === 'denied') {
+      main.innerHTML = '<div class="panel login"><h2>권한이 없는 계정입니다</h2><p class="sub">' + esc(teacherEmail) + ' 계정은 교사로 등록되어 있지 않습니다. 등록한 계정으로 다시 로그인해 주세요.</p><button class="btn primary" id="btn-logout2">다른 계정으로 로그인</button></div>';
+      return;
+    }
+    if (phase === 'error') {
+      main.innerHTML = '<div class="panel"><div class="err">' + esc(errText || '연결하지 못했습니다.') + '</div></div>';
+      return;
+    }
+    if (ROLE === 'teacher') renderTeacher(full); else renderParent(full);
+  }
+  var errText = '';
+  function onData(){
+    if (phase !== 'ready') return;
+    setTitle();
+    if (ROLE === 'parent' && selKey && !submitting && (isBooked(selKey) || isBlocked(selKey))) {
+      toast('선택한 시간이 방금 마감되었습니다. 다른 시간을 골라 주세요.');
+      selKey = null; renderMain(true); return;
+    }
+    renderMain(false);
+  }
+
+  /* ---------- 학부모 ---------- */
+  function myKeys(){ return Object.keys(bookings).filter(function(k){ return slots[k]; }).sort(); }
+  function pickDefaultDate(){
+    var ds = sortedDates(), ts = timesOf(cfg);
+    for (var i = 0; i < ds.length; i++) for (var j = 0; j < ts.length; j++) {
+      var k = keyOf(ds[i], ts[j]);
+      if (!isPast(ds[i], ts[j]) && !isBooked(k) && !isBlocked(k)) return ds[i];
+    }
+    return ds[0] || null;
+  }
+  function renderParent(full){
+    var main = $('#main');
+    if (!cfg || !sortedDates().length) {
+      main.innerHTML = '<div class="panel"><div class="empty">상담 일정이 아직 준비되지 않았습니다. 선생님이 시간을 열면 여기에서 예약할 수 있어요.</div></div>';
+      return;
+    }
+    if (!selDate || sortedDates().indexOf(selDate) < 0) selDate = pickDefaultDate();
+    if (full || !$('#p-slots')) {
+      main.innerHTML =
+        '<div class="panel">' +
+          (cfg.notice ? '<div class="notice">' + esc(cfg.notice) + '</div>' : '') +
+          '<div id="p-mine"></div>' +
+          '<h2>1. 날짜 선택</h2><div class="datetabs" id="p-dates"></div>' +
+          '<h2>2. 시간 선택 <span class="sub" id="p-len"></span></h2><div class="slots" id="p-slots"></div>' +
+          '<div id="p-form"></div>' +
+        '</div>';
+      renderForm();
+    }
+    renderMine(); renderDates(); renderSlots();
+  }
+  function renderMine(){
+    var el = $('#p-mine'); if (!el) return;
+    var ks = myKeys();
+    if (!ks.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<h2>내 예약</h2><div class="mine-list">' + ks.map(function(k){
+      var p = splitKey(k);
+      return '<div class="mine-item"><span><b>' + esc(fd(p.date)) + ' ' + esc(p.time) + '–' + esc(endTime(p.time)) + '</b> · ' + esc(bookings[k].student) + ' 학생</span>' +
+        '<button class="btn danger" data-cancel="' + esc(k) + '">예약 취소</button></div>';
+    }).join('') + '</div>';
+  }
+  function renderDates(){
+    var el = $('#p-dates'); if (!el) return;
+    el.innerHTML = sortedDates().map(function(d){
+      return '<button class="dtab" data-date="' + d + '" aria-pressed="' + (d === selDate) + '">' + esc(md(d)) + '<small>' + dowOf(d) + '요일</small></button>';
+    }).join('');
+  }
+  function renderSlots(){
+    var el = $('#p-slots'); if (!el) return;
+    $('#p-len').textContent = '· 1회 ' + (+cfg.duration || 20) + '분';
+    el.innerHTML = timesOf(cfg).map(function(t){
+      var k = keyOf(selDate, t), cls = 'slot', label, dis = true;
+      if (bookings[k] && slots[k]) { label = '내 예약'; cls += ' mine'; }
+      else if (isBooked(k)) label = '마감';
+      else if (isBlocked(k)) label = '불가';
+      else if (isPast(selDate, t)) label = '지남';
+      else { label = '가능'; dis = false; }
+      return '<button class="' + cls + '" data-slot="' + k + '"' + (dis ? ' disabled' : '') + ' aria-pressed="' + (k === selKey) + '">' + t + '<small>' + label + '</small></button>';
+    }).join('');
+  }
+  function renderForm(){
+    var el = $('#p-form'); if (!el) return;
+    if (!selKey) { el.innerHTML = '<p class="sub">시간을 고르면 신청 양식이 나타납니다.</p>'; return; }
+    var p = splitKey(selKey);
+    el.innerHTML =
+      '<h2>3. 신청 정보</h2>' +
+      '<div id="bookform" class="panel" style="background:var(--surface2);border-color:transparent">' +
+      '<div><b>' + esc(fd(p.date)) + ' ' + esc(p.time) + '–' + esc(endTime(p.time)) + '</b></div>' +
+      '<div class="fgrid">' +
+        '<label class="f">학생 이름<input id="f-student" required maxlength="20" autocomplete="off"></label>' +
+        '<label class="f">보호자 성함<input id="f-parent" required maxlength="20" autocomplete="off"></label>' +
+        '<label class="f">연락처 (선택)<input id="f-phone" type="tel" maxlength="20" inputmode="tel" placeholder="010-0000-0000"></label>' +
+        '<label class="f">상담 방식<select id="f-mode">' + MODES.map(function(x){ return '<option>' + x + '</option>'; }).join('') + '</select></label>' +
+      '</div>' +
+      '<label class="f">상담하고 싶은 내용 (선택)<textarea id="f-topic" maxlength="300" placeholder="학교생활, 학습, 진로 등 미리 말씀해 주시면 준비하겠습니다."></textarea></label>' +
+      '<div class="row"><button class="btn primary" type="button" id="f-submit">예약하기</button><button class="btn" type="button" id="f-clear">선택 취소</button></div>' +
+      '</div>';
+  }
+  async function submitBooking(){
+    if (!selKey || submitting) return;
+    var student = $('#f-student').value.trim(), parent = $('#f-parent').value.trim();
+    if (!student || !parent) {
+      toast('학생 이름과 보호자 성함을 입력해 주세요.');
+      (student ? $('#f-parent') : $('#f-student')).focus();
+      return;
+    }
+    var btn = $('#f-submit'); btn.disabled = true; submitting = true;
+    var key = selKey;
+    var info = { student: student, parent: parent, phone: $('#f-phone').value.trim(), mode: $('#f-mode').value, topic: $('#f-topic').value.trim() };
+    try {
+      await api.book(key, info);
+      banner('');
+      selKey = null; submitting = false;
+      toast('예약이 완료되었습니다.');
+      renderMain(true);
+    } catch (e) {
+      submitting = false;
+      fail(e);
+      if (e && e.code === 'taken') { selKey = null; renderMain(true); }
+      else if ($('#f-submit')) $('#f-submit').disabled = false;
+    }
+  }
+  async function cancelMine(key){
+    try { await api.cancel(key, false); toast('예약을 취소했습니다.'); banner(''); }
+    catch (e) { fail(e); }
+  }
+
+  /* ---------- 교사 ---------- */
+  function noteOf(k){ return notes[k] || {}; }
+  function statusOf(k){ return noteOf(k).status || 'scheduled'; }
+  function stats(){
+    var s = { total: 0, booked: 0, done: 0, follow: 0, noshow: 0 }, ts = timesOf(cfg);
+    sortedDates().forEach(function(d){ ts.forEach(function(t){
+      var k = keyOf(d, t);
+      if (isBlocked(k)) return;
+      s.total++;
+      if (isBooked(k)) {
+        s.booked++;
+        if (statusOf(k) === 'done') s.done++;
+        if (statusOf(k) === 'noshow') s.noshow++;
+        if (noteOf(k).follow) s.follow++;
+      }
+    }); });
+    return s;
+  }
+  function renderTeacher(full){
+    var main = $('#main');
+    if (full || !$('#t-overview')) {
+      main.innerHTML =
+        '<div class="panel" id="t-overview"></div>' +
+        '<div class="panel" id="t-detail" style="display:none"></div>' +
+        '<div class="panel"><details class="settings" id="t-settings"' + (cfg ? '' : ' open') + '><summary>상담 시간 설정</summary><div id="t-settings-body"></div></details></div>' +
+        '<div class="panel" id="t-links"></div>';
+      renderSettings(); renderLinks();
+    }
+    renderOverview();
+    var det = $('#t-detail');
+    if (tKey && (full || !det.contains(document.activeElement))) renderDetail();
+  }
+  function renderOverview(){
+    var el = $('#t-overview'); if (!el) return;
+    if (!cfg || !sortedDates().length) { el.innerHTML = '<div class="empty">아래 \'상담 시간 설정\'에서 날짜와 시간을 정하면 일정표가 만들어집니다.</div>'; return; }
+    var s = stats(), ds = sortedDates(), ts = timesOf(cfg);
+    var head = '<tr><th scope="col" style="width:64px"></th>' + ds.map(function(d){ return '<th scope="col">' + esc(md(d)) + ' <span style="font-weight:400;color:var(--muted)">' + dowOf(d) + '</span></th>'; }).join('') + '</tr>';
+    var body = ts.map(function(t){
+      return '<tr><th scope="row">' + t + '</th>' + ds.map(function(d){
+        var k = keyOf(d, t), cls = 'cell', inner = '';
+        if (isBlocked(k)) { cls += ' blocked'; inner = '<span class="tag">불가</span>'; }
+        else if (isBooked(k)) {
+          var st = statusOf(k), n = noteOf(k), b = bookings[k] || {};
+          cls += st === 'done' ? ' done' : st === 'noshow' ? ' noshow' : ' booked';
+          inner = '<span class="nm">' + esc(b.student || '예약됨') + '</span>' +
+            '<span>' + (st !== 'scheduled' ? '<span class="tag st-' + st + '">' + STATUS[st] + '</span> ' : '') + (n.follow ? '<span class="tag follow">후속</span>' : '') + '</span>';
+        } else { cls += ' open'; inner = '비어 있음'; }
+        return '<td><button class="' + cls + '" data-cell="' + k + '" aria-pressed="' + (k === tKey) + '">' + inner + '</button></td>';
+      }).join('') + '</tr>';
+    }).join('');
+    el.innerHTML =
+      '<div class="row" style="justify-content:space-between"><h2>상담 일정표</h2><button class="btn" id="t-copy">예약 목록 복사</button></div>' +
+      '<div class="summary"><span>예약 <b>' + s.booked + '/' + s.total + '</b></span><span>완료 <b>' + s.done + '</b></span><span>불참 <b>' + s.noshow + '</b></span><span>후속 조치 <b>' + s.follow + '</b></span></div>' +
+      '<div class="legend"><span><i style="background:var(--accent-soft)"></i>예약됨</span><span><i style="background:var(--done-soft)"></i>완료</span><span><i style="background:var(--warn-soft)"></i>불참</span><span><i style="background:var(--surface2)"></i>불가</span></div>' +
+      '<div class="tablewrap" id="t-grid"><table class="grid"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+      '<div id="copybox"></div>';
+  }
+  function renderDetail(){
+    var el = $('#t-detail'); if (!el) return;
+    if (!tKey) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    var p = splitKey(tKey), head = '<div class="row" style="justify-content:space-between"><h3>' + esc(fd(p.date)) + ' ' + esc(p.time) + '–' + esc(endTime(p.time)) + '</h3><button class="btn" id="t-close">닫기</button></div>';
+    if (isBooked(tKey)) {
+      var s = bookings[tKey] || {}, n = noteOf(tKey), st = n.status || 'scheduled';
+      el.innerHTML = head +
+        '<dl class="info"><dt>학생</dt><dd>' + esc(s.student || '-') + '</dd><dt>보호자</dt><dd>' + esc(s.parent || '-') + '</dd><dt>연락처</dt><dd>' + esc(s.phone || '-') + '</dd><dt>방식</dt><dd>' + esc(s.mode || '-') + '</dd><dt>희망 내용</dt><dd>' + esc(s.topic || '-') + '</dd></dl>' +
+        '<div class="radios" role="radiogroup" aria-label="상담 상태">' + Object.keys(STATUS).map(function(k){
+          return '<label><input type="radio" name="t-status" value="' + k + '"' + (st === k ? ' checked' : '') + '>' + STATUS[k] + '</label>';
+        }).join('') + '<label><input type="checkbox" id="t-follow"' + (n.follow ? ' checked' : '') + '>후속 조치 필요</label></div>' +
+        '<label class="f">상담 기록<textarea id="t-memo" maxlength="2000" placeholder="상담 내용, 합의한 사항, 다음에 확인할 일">' + esc(n.memo || '') + '</textarea></label>' +
+        '<div class="row"><button class="btn primary" id="t-save">기록 저장</button>' +
+        '<button class="btn danger' + (armedCancel ? ' armed' : '') + '" id="t-cancel">' + (armedCancel ? '한 번 더 누르면 예약이 삭제됩니다' : '예약 취소') + '</button></div>';
+    } else {
+      var blocked = isBlocked(tKey);
+      el.innerHTML = head +
+        (blocked ? '<p class="sub">이 시간은 학부모에게 \'불가\'로 보입니다.</p>' :
+        '<p class="sub">비어 있는 시간입니다. 전화로 받은 예약은 직접 넣을 수 있어요.</p>' +
+        '<div id="t-manual" class="fgrid"><label class="f">학생 이름<input id="m-student" required maxlength="20"></label>' +
+        '<label class="f">보호자 성함<input id="m-parent" maxlength="20"></label>' +
+        '<label class="f">연락처<input id="m-phone" type="tel" maxlength="20"></label>' +
+        '<label class="f">방식<select id="m-mode">' + MODES.map(function(x){ return '<option>' + x + '</option>'; }).join('') + '</select></label>' +
+        '<div class="row" style="align-items:flex-end"><button class="btn primary" type="button" id="m-submit">예약 넣기</button></div></div>') +
+        '<div class="row"><button class="btn" id="t-block">' + (blocked ? '다시 열기' : '이 시간 막기') + '</button></div>';
+    }
+  }
+  function renderSettings(){
+    var el = $('#t-settings-body'); if (!el) return;
+    if (!tSettingsInit) {
+      if (cfg) draft = { title: cfg.title || '', notice: cfg.notice || '', dates: (cfg.dates || []).slice(), start: cfg.start || '15:00', end: cfg.end || '17:40', duration: +cfg.duration || 20 };
+      tSettingsInit = true;
+    }
+    el.innerHTML =
+      '<div class="fgrid">' +
+        '<label class="f">상담 제목<input id="s-title" maxlength="40" value="' + esc(draft.title) + '" placeholder="예: 2학기 학부모 상담 주간"></label>' +
+        '<label class="f">시작 시각<input id="s-start" type="time" value="' + esc(draft.start) + '"></label>' +
+        '<label class="f">마치는 시각<input id="s-end" type="time" value="' + esc(draft.end) + '"></label>' +
+        '<label class="f">1회 시간<select id="s-dur">' + [15,20,25,30,40].map(function(m){ return '<option value="' + m + '"' + (+draft.duration === m ? ' selected' : '') + '>' + m + '분</option>'; }).join('') + '</select></label>' +
+      '</div>' +
+      '<label class="f">학부모 안내 문구 (선택)<textarea id="s-notice" maxlength="400" placeholder="상담 장소, 준비물, 늦을 때 연락처 등">' + esc(draft.notice) + '</textarea></label>' +
+      '<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:.85rem;color:var(--muted);font-weight:500">상담 날짜</span>' +
+        '<div class="row"><input id="s-date" type="date" style="width:auto"><button class="btn" id="s-add" type="button">날짜 추가</button></div>' +
+        '<div class="chips" id="s-chips"></div></div>' +
+      '<div class="row"><button class="btn primary" id="s-save" type="button">설정 저장</button></div>';
+    renderChips();
+  }
+  function renderChips(){
+    var el = $('#s-chips'); if (!el) return;
+    el.innerHTML = draft.dates.slice().sort().map(function(d){
+      return '<span class="chip">' + esc(fd(d)) + '<button type="button" data-rmdate="' + d + '" aria-label="' + esc(fd(d)) + ' 삭제">×</button></span>';
+    }).join('') || '<span class="sub">날짜를 추가해 주세요.</span>';
+  }
+  function baseUrl(){ return location.href.split(/[?#]/)[0]; }
+  function renderLinks(){
+    var el = $('#t-links'); if (!el) return;
+    var b = baseUrl();
+    el.innerHTML =
+      '<h2>링크 공유</h2>' +
+      '<div class="linkrow"><span>학부모용</span><input id="lk-parent" readonly value="' + esc(b) + '"><button class="btn" data-copyinput="lk-parent">복사</button></div>' +
+      '<div class="linkrow"><span>교사용</span><input id="lk-teacher" readonly value="' + esc(b + '?role=teacher') + '"><button class="btn" data-copyinput="lk-teacher">복사</button></div>' +
+      '<p class="sub">학부모용 링크만 학부모에게 보내세요. 교사용 링크는 등록된 선생님 Google 계정으로 로그인해야 열립니다.</p>';
+  }
+  function readDraft(){
+    draft.title = $('#s-title').value.trim();
+    draft.notice = $('#s-notice').value.trim();
+    draft.start = $('#s-start').value;
+    draft.end = $('#s-end').value;
+    draft.duration = +$('#s-dur').value;
+  }
+  async function saveSettings(){
+    readDraft();
+    if (!draft.dates.length) { toast('상담 날짜를 하나 이상 추가해 주세요.'); return; }
+    if (!draft.start || !draft.end || toMin(draft.end) - toMin(draft.start) < draft.duration) { toast('시작·종료 시각과 1회 시간을 확인해 주세요.'); return; }
+    try {
+      await api.saveConfig({ title: draft.title, notice: draft.notice, dates: draft.dates.slice().sort(), start: draft.start, end: draft.end, duration: draft.duration, blocked: (cfg && cfg.blocked) || [] });
+      banner(''); toast('설정을 저장했습니다.');
+    } catch (e) { fail(e); }
+  }
+  async function saveNote(){
+    var st = document.querySelector('input[name="t-status"]:checked');
+    var data = { status: st ? st.value : 'scheduled', follow: $('#t-follow').checked, memo: $('#t-memo').value.trim(), updated: Date.now() };
+    try { await api.saveNote(tKey, data); banner(''); toast('기록을 저장했습니다.'); }
+    catch (e) { fail(e); }
+  }
+  async function cancelBooking(){
+    if (!armedCancel) { armedCancel = true; renderDetail(); return; }
+    var k = tKey; armedCancel = false;
+    try { await api.cancel(k, true); banner(''); toast('예약을 삭제했습니다.'); renderDetail(); }
+    catch (e) { fail(e); }
+  }
+  async function manualBook(){
+    var info = { student: $('#m-student').value.trim(), parent: $('#m-parent').value.trim(), phone: $('#m-phone').value.trim(), mode: $('#m-mode').value, topic: '' };
+    if (!info.student) { toast('학생 이름을 입력해 주세요.'); $('#m-student').focus(); return; }
+    try { await api.manualBook(tKey, info); banner(''); toast('예약을 넣었습니다.'); renderDetail(); }
+    catch (e) { fail(e); }
+  }
+  async function toggleBlock(){
+    var set = {}; ((cfg && cfg.blocked) || []).forEach(function(x){ set[x] = 1; });
+    if (set[tKey]) delete set[tKey]; else set[tKey] = 1;
+    try { await api.setBlocked(Object.keys(set)); banner(''); renderDetail(); }
+    catch (e) { fail(e); }
+  }
+  function summaryText(){
+    var lines = [(cfg.title || '학부모 상담') + ' 예약 현황'];
+    sortedDates().forEach(function(d){
+      var rows = [];
+      timesOf(cfg).forEach(function(t){
+        var k = keyOf(d, t);
+        if (isBooked(k)) {
+          var b = bookings[k] || {};
+          rows.push('  ' + t + '–' + endTime(t) + '  ' + (b.student || '예약됨') + (b.parent ? ' (' + b.parent + ')' : '') + (b.mode ? ' · ' + b.mode : ''));
+        }
+      });
+      lines.push(''); lines.push(fd(d));
+      lines.push(rows.length ? rows.join('\n') : '  예약 없음');
+    });
+    return lines.join('\n');
+  }
+  async function copySummary(){
+    var text = summaryText();
+    try { await navigator.clipboard.writeText(text); toast('예약 목록을 복사했습니다.'); }
+    catch (e) {
+      var box = $('#copybox');
+      box.innerHTML = '<textarea class="copybox" readonly></textarea>';
+      var ta = box.querySelector('textarea'); ta.value = text; ta.focus(); ta.select();
+      toast('아래 내용을 직접 복사해 주세요.');
+    }
+  }
+
+  /* ---------- 이벤트 ---------- */
+  document.addEventListener('click', function(ev){
+    var t = ev.target.closest('button'); if (!t) return;
+    if (t.id === 'btn-login') { banner(''); Promise.resolve(api.signIn()).catch(function(e){ fail(e); }); return; }
+    if (t.id === 'btn-logout' || t.id === 'btn-logout2') { Promise.resolve(api.signOut()).catch(function(){}); return; }
+    if (t.dataset.date) { selDate = t.dataset.date; selKey = null; renderDates(); renderSlots(); renderForm(); return; }
+    if (t.dataset.slot) { selKey = t.dataset.slot; renderSlots(); renderForm(); var f = $('#f-student'); if (f) f.focus(); return; }
+    if (t.id === 'f-submit') return submitBooking();
+    if (t.id === 'm-submit') return manualBook();
+    if (t.dataset.role) return setRole(t.dataset.role);
+    if (t.id === 'btn-reset') return resetDemo();
+    if (t.id === 'f-clear') { selKey = null; renderSlots(); renderForm(); return; }
+    if (t.dataset.cancel) return cancelMine(t.dataset.cancel);
+    if (t.dataset.cell) {
+      tKey = t.dataset.cell; armedCancel = false; renderOverview(); renderDetail();
+      var d = $('#t-detail'); if (d && d.scrollIntoView) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
+    if (t.id === 't-close') { tKey = null; armedCancel = false; renderOverview(); renderDetail(); return; }
+    if (t.id === 't-save') return saveNote();
+    if (t.id === 't-cancel') return cancelBooking();
+    if (t.id === 't-block') return toggleBlock();
+    if (t.id === 't-copy') return copySummary();
+    if (t.dataset.copyinput) { var inp = document.getElementById(t.dataset.copyinput); return copyText(inp.value, inp); }
+    if (t.id === 's-add') {
+      var v = $('#s-date').value; if (!v) return;
+      readDraft();
+      if (draft.dates.indexOf(v) < 0) draft.dates.push(v);
+      $('#s-date').value = ''; renderChips(); return;
+    }
+    if (t.dataset.rmdate) { readDraft(); draft.dates = draft.dates.filter(function(d){ return d !== t.dataset.rmdate; }); renderChips(); return; }
+    if (t.id === 's-save') return saveSettings();
+  });
+  document.addEventListener('keydown', function(ev){
+    if (ev.key !== 'Enter' || ev.isComposing || ev.target.tagName !== 'INPUT') return;
+    if (ev.target.closest('#bookform')) { ev.preventDefault(); submitBooking(); }
+    else if (ev.target.closest('#t-manual')) { ev.preventDefault(); manualBook(); }
+  });
+
+  /* ---------- 시작 ---------- */
+  function needList(){ return ROLE === 'teacher' ? ['config', 'slots', 'bookings', 'notes'] : ['config', 'slots', 'bookings']; }
+  function mark(n){
+    seen[n] = true;
+    if (phase === 'loading' && needList().every(function(x){ return seen[x]; })) { phase = 'ready'; renderAll(); }
+    else if (phase === 'ready') onData();
+  }
+  var handlers = {
+    config: function(c){ cfg = c; mark('config'); },
+    slots: function(m){ slots = m; mark('slots'); },
+    bookings: function(m){ bookings = m; mark('bookings'); },
+    notes: function(m){ notes = m; mark('notes'); },
+    user: function(email){ teacherEmail = email; },
+    state: function(p, info){
+      phase = p;
+      if (p === 'loading' || p === 'login' || p === 'denied') seen = {};
+      if (p === 'login') { cfg = null; slots = {}; bookings = {}; notes = {}; tKey = null; }
+      if (p === 'error') errText = errMsg(info);
+      if (p === 'error' && info && info.code) errText = errMsg(info);
+      renderAll();
+    }
+  };
+  api = DEMO ? makeDemo() : makeFirebase();
+  renderAll();
+  Promise.resolve(api.start(handlers)).catch(function(e){ handlers.state('error', e); });
+})();
+</script>
+</body>
+</html>
